@@ -2,20 +2,26 @@ import 'dotenv/config';
 import express from 'express';
 import helmet from 'helmet';
 import cors from 'cors';
+import morgan from 'morgan';
 
 import { config } from './config/env';
-import { requestLogger, errorHandler } from './middlewares';
+import { requestLogger, errorHandler, dynamicCors } from './middlewares';
 import router from './routes';
 import { prisma } from './config/prisma';
+import webhooksRouter from './modules/webhooks/webhooks.router';
 
 const app = express();
 
 // ── Seguridad ─────────────────────────────────────────────
-app.use(helmet());
-app.use(cors());
+app.use(morgan(config.nodeEnv === 'development' ? 'dev' : 'combined'));
 
-// ── Parsing ───────────────────────────────────────────────
-app.use(express.json());
+// ─── Webhooks (Requiere Body crudo) ──────────────────────────────────────────
+app.use('/api/webhooks', express.raw({ type: 'application/json' }), webhooksRouter);
+
+// ─── Middlewares Globales ───────────────────────────────────────────────────
+app.use(helmet());
+app.use(cors(dynamicCors));
+app.use(express.json()); // A partir de aquí, req.body será parseado como JSON
 app.use(express.urlencoded({ extended: true }));
 
 // ── Logging ───────────────────────────────────────────────

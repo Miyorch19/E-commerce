@@ -12,15 +12,18 @@ router.use(healthRouter);
 // resolveTenant corre antes de auth y cualquier módulo de negocio
 router.use(resolveTenant);
 
+import negociosRouter from '../modules/negocios/negocios.router';
+import pedidosRouter from '../modules/pedidos/pedidos.router';
+import membresiasRouter from '../modules/membresias/membresias.router';
+import clientesRouter from '../modules/clientes/clientes.router';
+
 // Módulo auth (login, register, refresh, logout, me)
 router.use('/auth', authRouter);
 
-// Aquí se montarán los módulos futuros (ya con tenant resuelto):
-// router.use('/negocios',    authenticate, negociosRouter);
-// router.use('/catalogo',    authenticate, catalogoRouter);
-// router.use('/pedidos',     authenticate, pedidosRouter);
-// router.use('/citas',       authenticate, citasRouter);
-// router.use('/clientes',    authenticate, clientesRouter);
-// router.use('/membresias',  authenticate, membresiasRouter);
+// Módulos de Stripe
+router.use('/negocios', negociosRouter);
+router.use('/pedidos', pedidosRouter);
+router.use('/membresias', membresiasRouter);
+router.use('/clientes', clientesRouter);
 
 export default router;

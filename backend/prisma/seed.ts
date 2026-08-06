@@ -11,24 +11,34 @@ const SALT_ROUNDS = 12;
 async function main(): Promise<void> {
   console.log('🌱 Starting seed...\n');
 
-  // ── 1. Negocio ──────────────────────────────────────────────────────────────
-  const negocio = await prisma.negocio.upsert({
-    where: { dominio: SEED_DOMINIO },
-    update: {
-      nombre: 'Negocio Demo',
-      tipo: TipoNegocio.TIENDA,
-      activo: true,
-    },
-    create: {
-      nombre: 'Negocio Demo',
-      dominio: SEED_DOMINIO,
-      tipo: TipoNegocio.TIENDA,
-      activo: true,
-      email: 'demo@negocio.com',
-      telefono: '+521234567890',
-      pais: 'MX',
-    },
+  // NOTA: Ya no usamos `upsert` directo para Negocio ni Usuario,
+  // porque el constraint de unicidad fue movido a SQL puro (índice parcial)
+  // para soportar soft deletes. Prisma requiere `@unique` para `upsert`.
+  let negocio = await prisma.negocio.findFirst({
+    where: { dominio: SEED_DOMINIO, activo: true },
   });
+
+  if (negocio) {
+    negocio = await prisma.negocio.update({
+      where: { id: negocio.id },
+      data: {
+        nombre: 'Negocio Demo',
+        tipo: TipoNegocio.TIENDA,
+      },
+    });
+  } else {
+    negocio = await prisma.negocio.create({
+      data: {
+        nombre: 'Negocio Demo',
+        dominio: SEED_DOMINIO,
+        tipo: TipoNegocio.TIENDA,
+        activo: true,
+        email: 'demo@negocio.com',
+        telefono: '+521234567890',
+        pais: 'MX',
+      },
+    });
+  }
 
   console.log(`✅ Negocio  → id: ${negocio.id}  dominio: "${negocio.dominio}"`);
 
@@ -47,28 +57,35 @@ async function main(): Promise<void> {
   // ── 3. Usuario admin ────────────────────────────────────────────────────────
   const passwordHash = await bcrypt.hash(SEED_PASSWORD, SALT_ROUNDS);
 
-  const usuario = await prisma.usuario.upsert({
+  let usuario = await prisma.usuario.findFirst({
     where: {
-      negocioId_email: {
-        negocioId: negocio.id,
-        email: SEED_EMAIL,
-      },
-    },
-    update: {
-      rolId: rol.id,
-      passwordHash,
-      activo: true,
-    },
-    create: {
       negocioId: negocio.id,
-      rolId: rol.id,
-      nombre: 'Admin Demo',
       email: SEED_EMAIL,
-      passwordHash,
-      emailVerificado: true,
       activo: true,
     },
   });
+
+  if (usuario) {
+    usuario = await prisma.usuario.update({
+      where: { id: usuario.id },
+      data: {
+        rolId: rol.id,
+        passwordHash,
+      },
+    });
+  } else {
+    usuario = await prisma.usuario.create({
+      data: {
+        negocioId: negocio.id,
+        rolId: rol.id,
+        nombre: 'Admin Demo',
+        email: SEED_EMAIL,
+        passwordHash,
+        emailVerificado: true,
+        activo: true,
+      },
+    });
+  }
 
   console.log(`✅ Usuario  → id: ${usuario.id}  email: "${usuario.email}"`);
 

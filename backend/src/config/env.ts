@@ -50,5 +50,6 @@ export const config = {
     publishableKey: requireEnv('STRIPE_PUBLISHABLE_KEY'),
     secretKey: requireEnv('STRIPE_SECRET_KEY'),
     webhookSecret: requireEnv('STRIPE_WEBHOOK_SECRET'),
+    webhookConnectSecret: requireEnv('STRIPE_CONNECT_WEBHOOK_SECRET'),
   },
 } as const;

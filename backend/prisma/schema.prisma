@@ -34,6 +34,7 @@ enum EstadoPago {
   RECHAZADO
   REEMBOLSADO
   CANCELADO
+  REQUIERE_AUTENTICACION
 }
 
 enum EstadoPedido {
@@ -193,6 +194,7 @@ model PagoMembresia {
   metodo          MetodoPago
   stripePaymentId String?
   stripeInvoiceId String?
+  periodo         String? // "YYYY-MM"
   periodoInicio   DateTime?
   periodoFin      DateTime?
   createdAt       DateTime   @default(now())
@@ -209,13 +211,15 @@ model PagoMembresia {
 // ─────────────────────────────────────────────────────────────
 
 model Negocio {
-  id          String      @id @default(cuid())
-  nombre      String
-  dominio     String      @unique
-  tipo        TipoNegocio @default(TIENDA)
-  descripcion String?
-  logo        String? // Cloudinary URL
-  activo      Boolean     @default(true)
+  id           String      @id @default(cuid())
+  nombre       String
+  // El constraint único parcial de dominio (activo=true) se maneja mediante SQL manual
+  dominio      String
+  customDomain String?
+  tipo         TipoNegocio @default(TIENDA)
+  descripcion  String?
+  logo         String? // Cloudinary URL
+  activo       Boolean     @default(true)
 
   // Contacto
   email    String?
@@ -235,6 +239,10 @@ model Negocio {
   // Stripe Connect
   stripeAccountId          String?
   stripeOnboardingCompleto Boolean @default(false)
+
+  // Plataforma billing
+  stripeCustomerId   String?
+  stripeMetodoPagoId String?
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -379,7 +387,7 @@ model Usuario {
   sesiones   Sesion[]
   auditorias Auditoria[]
 
-  @@unique([negocioId, email])
+  // El constraint único parcial de negocioId_email (activo=true) se maneja mediante SQL manual
   @@index([negocioId])
   @@index([rolId])
   @@map("usuarios")
@@ -652,19 +660,20 @@ model Pago {
 // ─────────────────────────────────────────────────────────────
 
 model ClienteAuth {
-  id              String    @id @default(cuid())
-  negocioId       String
-  nombre          String
-  email           String
-  passwordHash    String?
-  googleId        String?
-  telefono        String?
-  avatar          String? // Cloudinary URL
-  emailVerificado Boolean   @default(false)
-  activo          Boolean   @default(true)
-  ultimoAcceso    DateTime?
-  createdAt       DateTime  @default(now())
-  updatedAt       DateTime  @updatedAt
+  id               String    @id @default(cuid())
+  negocioId        String
+  nombre           String
+  email            String
+  passwordHash     String?
+  googleId         String?
+  stripeCustomerId String?
+  telefono         String?
+  avatar           String? // Cloudinary URL
+  emailVerificado  Boolean   @default(false)
+  activo           Boolean   @default(true)
+  ultimoAcceso     DateTime?
+  createdAt        DateTime  @default(now())
+  updatedAt        DateTime  @updatedAt
 
   negocio          Negocio             @relation(fields: [negocioId], references: [id])
   metodosPago      MetodoPagoCliente[]
@@ -676,7 +685,7 @@ model ClienteAuth {
   resenas          Resena[]
 
   // Un email puede existir en múltiples negocios — único por tenant
-  @@unique([negocioId, email])
+  // El constraint único parcial de negocioId_email (activo=true) se maneja mediante SQL manual
   @@index([negocioId])
   @@map("clientes_auth")
 }
@@ -942,4 +951,12 @@ model Configuracion {
   @@unique([negocioId, modulo, clave])
   @@index([negocioId])
   @@map("configuraciones")
+}
+
+model WebhookEventProcesado {
+  id          String   @id // event.id de Stripe
+  tipo        String
+  procesadoEn DateTime @default(now())
+
+  @@map("webhook_eventos_procesados")
 }

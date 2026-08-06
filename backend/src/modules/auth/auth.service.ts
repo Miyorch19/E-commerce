@@ -110,9 +110,9 @@ export async function registerCliente(
   dto: RegisterClienteDto,
   negocioId: string
 ): Promise<AuthTokens & { cliente: Record<string, unknown> }> {
-  // Verificar unicidad por [negocioId, email]
-  const existing = await prisma.clienteAuth.findUnique({
-    where: { negocioId_email: { negocioId, email: dto.email } },
+  // Verificar unicidad por [negocioId, email] (activo=true)
+  const existing = await prisma.clienteAuth.findFirst({
+    where: { negocioId, email: dto.email, activo: true },
   });
 
   if (existing) {
@@ -261,7 +261,17 @@ export async function loginGoogle(
     throw new AppError('Invalid Google token.', 401);
   }
 
-  const { email, name, sub: googleId, picture } = payload;
+  const { email, name, sub: googleId, picture, email_verified } = payload;
+
+  // Prevención de Account Takeover:
+  // Si vinculamos o creamos cuentas con un email que Google reporta como no verificado, 
+  // un atacante podría secuestrar cuentas preexistentes no validadas o usurpar la identidad.
+  if (!email_verified) {
+    throw new AppError(
+      'El email de tu cuenta de Google no está verificado, no se puede usar para iniciar sesión.',
+      403
+    );
+  }
 
   if (dto.contexto === 'panel') {
     // Buscar Usuario (no se auto-registran)
@@ -322,14 +332,12 @@ export async function loginGoogle(
 
   } else {
     // Buscar o crear ClienteAuth
-    let cliente = await prisma.clienteAuth.findUnique({
-      where: { negocioId_email: { negocioId, email } },
+    let cliente = await prisma.clienteAuth.findFirst({
+      where: { negocioId, email, activo: true },
     });
 
     if (cliente) {
-      if (!cliente.activo) {
-        throw new AppError('Client account is inactive.', 401);
-      }
+      // if (!cliente.activo) { ... } // Not needed because we searched with activo: true
       if (!cliente.googleId || !cliente.avatar) {
         cliente = await prisma.clienteAuth.update({
           where: { id: cliente.id },
