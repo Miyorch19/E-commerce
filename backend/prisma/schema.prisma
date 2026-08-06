@@ -1,5 +1,10 @@
-// This is your Prisma schema file.
-// Learn more: https://pris.ly/d/prisma-schema
+// ============================================================
+// schema.prisma — Plataforma Multitenant B2B/B2C
+// ORM: Prisma  |  DB: PostgreSQL (Supabase)
+// Multitenancy: row-level via negocioId
+// Soft delete: activo=false en Negocio, Usuario, Producto,
+//              Categoria, Cita, Pedido (sin onDelete: Cascade)
+// ============================================================
 
 generator client {
   provider = "prisma-client-js"
@@ -7,18 +12,934 @@ generator client {
 
 datasource db {
   provider  = "postgresql"
-  // DATABASE_URL → pooler de Supabase (pgbouncer) — usado en runtime
-  url       = env("DATABASE_URL")
-  // DIRECT_URL  → conexión directa — usada solo en migraciones
-  directUrl = env("DIRECT_URL")
+  url       = env("DATABASE_URL") // pooler (pgbouncer) — runtime
+  directUrl = env("DIRECT_URL") // conexión directa — migraciones
 }
 
-// ─── Modelo mínimo para probar la conexión ───────────────────────────────────
-model Negocio {
+// ─────────────────────────────────────────────────────────────
+// ENUMS
+// ─────────────────────────────────────────────────────────────
+
+enum EstadoMembresia {
+  TRIAL
+  ACTIVA
+  VENCIDA
+  CANCELADA
+  SUSPENDIDA
+}
+
+enum EstadoPago {
+  PENDIENTE
+  APROBADO
+  RECHAZADO
+  REEMBOLSADO
+  CANCELADO
+}
+
+enum EstadoPedido {
+  PENDIENTE
+  CONFIRMADO
+  EN_PREPARACION
+  LISTO
+  EN_CAMINO
+  ENTREGADO
+  CANCELADO
+}
+
+enum TipoPedido {
+  LOCAL
+  DELIVERY
+  WHATSAPP
+}
+
+enum MetodoPago {
+  EFECTIVO
+  STRIPE
+  MERCADO_PAGO
+}
+
+enum EstadoCita {
+  PENDIENTE
+  CONFIRMADA
+  EN_CURSO
+  COMPLETADA
+  CANCELADA
+  NO_SHOW
+}
+
+enum TipoNotificacion {
+  EMAIL
+  SMS
+  PUSH
+  IN_APP
+}
+
+enum EstadoResena {
+  PENDIENTE
+  APROBADA
+  RECHAZADA
+}
+
+enum TipoNegocio {
+  TIENDA
+  RESTAURANTE
+  SERVICIOS
+  SALON_BELLEZA
+  CLINICA
+  OTRO
+}
+
+enum DiaSemana {
+  LUNES
+  MARTES
+  MIERCOLES
+  JUEVES
+  VIERNES
+  SABADO
+  DOMINGO
+}
+
+// ─────────────────────────────────────────────────────────────
+// 1. NÚCLEO DE LA PLATAFORMA (B2B)
+// ─────────────────────────────────────────────────────────────
+
+model Plan {
+  id          String   @id @default(cuid())
+  nombre      String
+  descripcion String?
+  precio      Decimal  @db.Decimal(10, 2)
+  intervalo   String // "mensual" | "anual"
+  activo      Boolean  @default(true)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  planModulos PlanModulo[]
+  membresias  Membresia[]
+
+  @@map("planes")
+}
+
+model Modulo {
+  id          String   @id @default(cuid())
+  clave       String   @unique
+  nombre      String
+  descripcion String?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  planModulos PlanModulo[]
+
+  @@map("modulos")
+}
+
+model PlanModulo {
   id        String   @id @default(cuid())
-  nombre    String
+  planId    String
+  moduloId  String
+  createdAt DateTime @default(now())
+
+  plan   Plan   @relation(fields: [planId], references: [id])
+  modulo Modulo @relation(fields: [moduloId], references: [id])
+
+  @@unique([planId, moduloId])
+  @@index([planId])
+  @@index([moduloId])
+  @@map("plan_modulos")
+}
+
+model Membresia {
+  id                   String          @id @default(cuid())
+  negocioId            String          @unique
+  planId               String
+  estado               EstadoMembresia @default(TRIAL)
+  fechaInicio          DateTime
+  fechaVencimiento     DateTime
+  stripeSubscriptionId String?
+  stripePriceId        String?
+  canceladaEl          DateTime?
+  createdAt            DateTime        @default(now())
+  updatedAt            DateTime        @updatedAt
+
+  negocio   Negocio              @relation(fields: [negocioId], references: [id])
+  plan      Plan                 @relation(fields: [planId], references: [id])
+  historial HistorialMembresia[]
+  pagos     PagoMembresia[]
+
+  @@index([planId])
+  @@map("membresias")
+}
+
+model HistorialMembresia {
+  id          String          @id @default(cuid())
+  membresiaId String
+  estadoPrev  EstadoMembresia
+  estadoNuevo EstadoMembresia
+  motivo      String?
+  creadoPor   String? // userId que realizó el cambio
+  createdAt   DateTime        @default(now())
+
+  membresia Membresia @relation(fields: [membresiaId], references: [id])
+
+  @@index([membresiaId])
+  @@map("historial_membresias")
+}
+
+model PagoMembresia {
+  id              String     @id @default(cuid())
+  membresiaId     String
+  monto           Decimal    @db.Decimal(10, 2)
+  moneda          String     @default("MXN")
+  estado          EstadoPago @default(PENDIENTE)
+  metodo          MetodoPago
+  stripePaymentId String?
+  stripeInvoiceId String?
+  periodoInicio   DateTime?
+  periodoFin      DateTime?
+  createdAt       DateTime   @default(now())
+  updatedAt       DateTime   @updatedAt
+
+  membresia Membresia @relation(fields: [membresiaId], references: [id])
+
+  @@index([membresiaId])
+  @@map("pagos_membresias")
+}
+
+// ─────────────────────────────────────────────────────────────
+// 2. ENTIDAD CENTRAL DEL NEGOCIO
+// ─────────────────────────────────────────────────────────────
+
+model Negocio {
+  id          String      @id @default(cuid())
+  nombre      String
+  dominio     String      @unique
+  tipo        TipoNegocio @default(TIENDA)
+  descripcion String?
+  logo        String? // Cloudinary URL
+  activo      Boolean     @default(true)
+
+  // Contacto
+  email    String?
+  telefono String?
+  whatsapp String?
+  sitioWeb String?
+
+  // Dirección y GPS
+  direccion    String?
+  ciudad       String?
+  estado       String?
+  pais         String  @default("MX")
+  codigoPostal String?
+  latitud      Float?
+  longitud     Float?
+
+  // Stripe Connect
+  stripeAccountId          String?
+  stripeOnboardingCompleto Boolean @default(false)
+
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
+  // Relaciones (sin onDelete: Cascade — soft delete)
+  membresia       Membresia?
+  tema            Tema?
+  tokenesDiseno   TokenDiseno[]
+  secciones       SeccionSitio[]
+  usuarios        Usuario[]
+  sesiones        Sesion[]
+  auditorias      Auditoria[]
+  categorias      Categoria[]
+  productos       Producto[]
+  pedidos         Pedido[]
+  clientesAuth    ClienteAuth[]
+  citas           Cita[]
+  staff           Staff[]
+  horarios        Horario[]
+  galerias        Galeria[]
+  resenas         Resena[]
+  faqs            FAQ[]
+  redesSociales   RedSocial[]
+  notificaciones  Notificacion[]
+  configuraciones Configuracion[]
+
   @@map("negocios")
+}
+
+model Tema {
+  id              String   @id @default(cuid())
+  negocioId       String   @unique
+  plantilla       String   @default("default")
+  colorPrimario   String   @default("#000000")
+  colorSecundario String   @default("#ffffff")
+  colorAcento     String?
+  fontPrimaria    String   @default("Inter")
+  fontSecundaria  String?
+  borderRadius    String   @default("8px")
+  logoUrl         String? // Cloudinary URL
+  faviconUrl      String?
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  negocio Negocio @relation(fields: [negocioId], references: [id])
+
+  @@map("temas")
+}
+
+model TokenDiseno {
+  id        String   @id @default(cuid())
+  negocioId String
+  clave     String // ej: "--color-cta-bg"
+  valor     String // ej: "#FF5733"
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  negocio Negocio @relation(fields: [negocioId], references: [id])
+
+  @@unique([negocioId, clave])
+  @@index([negocioId])
+  @@map("tokens_diseno")
+}
+
+model SeccionSitio {
+  id        String   @id @default(cuid())
+  negocioId String
+  tipo      String // "hero" | "catalogo" | "testimonios" | "mapa" | "contacto" | etc.
+  activo    Boolean  @default(true)
+  orden     Int      @default(0)
+  config    Json? // configuración específica de la sección
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  negocio Negocio @relation(fields: [negocioId], references: [id])
+
+  @@index([negocioId])
+  @@map("secciones_sitio")
+}
+
+// ─────────────────────────────────────────────────────────────
+// 3. ACCESO Y SEGURIDAD
+// ─────────────────────────────────────────────────────────────
+
+model Rol {
+  id          String   @id @default(cuid())
+  nombre      String   @unique
+  descripcion String?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  permisos RolPermiso[]
+  usuarios Usuario[]
+
+  @@map("roles")
+}
+
+model Permiso {
+  id          String   @id @default(cuid())
+  clave       String   @unique // ej: "pedidos:leer", "productos:editar"
+  descripcion String?
+  createdAt   DateTime @default(now())
+
+  roles RolPermiso[]
+
+  @@map("permisos")
+}
+
+model RolPermiso {
+  id        String   @id @default(cuid())
+  rolId     String
+  permisoId String
+  createdAt DateTime @default(now())
+
+  rol     Rol     @relation(fields: [rolId], references: [id])
+  permiso Permiso @relation(fields: [permisoId], references: [id])
+
+  @@unique([rolId, permisoId])
+  @@index([rolId])
+  @@index([permisoId])
+  @@map("rol_permisos")
+}
+
+model Usuario {
+  id              String    @id @default(cuid())
+  negocioId       String
+  rolId           String
+  nombre          String
+  email           String
+  passwordHash    String?
+  googleId        String?
+  avatar          String? // Cloudinary URL
+  activo          Boolean   @default(true)
+  emailVerificado Boolean   @default(false)
+  ultimoAcceso    DateTime?
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
+
+  // Sin onDelete: Cascade — borrado lógico via activo=false
+  negocio    Negocio     @relation(fields: [negocioId], references: [id])
+  rol        Rol         @relation(fields: [rolId], references: [id])
+  sesiones   Sesion[]
+  auditorias Auditoria[]
+
+  @@unique([negocioId, email])
+  @@index([negocioId])
+  @@index([rolId])
+  @@map("usuarios")
+}
+
+model Sesion {
+  id           String    @id @default(cuid())
+  usuarioId    String
+  negocioId    String
+  token        String    @unique
+  refreshToken String?   @unique
+  ip           String?
+  userAgent    String?
+  expiraEl     DateTime
+  revokedAt    DateTime?
+  createdAt    DateTime  @default(now())
+
+  usuario Negocio @relation(fields: [negocioId], references: [id])
+  user    Usuario @relation(fields: [usuarioId], references: [id], onDelete: Cascade)
+
+  @@index([usuarioId])
+  @@index([negocioId])
+  @@map("sesiones")
+}
+
+model Auditoria {
+  id         String   @id @default(cuid())
+  negocioId  String
+  usuarioId  String?
+  accion     String // ej: "CREAR_PRODUCTO", "CANCELAR_PEDIDO"
+  entidad    String // nombre de la tabla afectada
+  entidadId  String?
+  datosPrev  Json?
+  datosNuevo Json?
+  ip         String?
+  createdAt  DateTime @default(now())
+
+  negocio Negocio  @relation(fields: [negocioId], references: [id])
+  usuario Usuario? @relation(fields: [usuarioId], references: [id])
+
+  @@index([negocioId])
+  @@index([usuarioId])
+  @@index([entidad, entidadId])
+  @@map("auditorias")
+}
+
+// ─────────────────────────────────────────────────────────────
+// 4. CATÁLOGO (E-COMMERCE)
+// ─────────────────────────────────────────────────────────────
+
+model Categoria {
+  id          String   @id @default(cuid())
+  negocioId   String
+  parentId    String? // auto-referencia para jerarquía
+  nombre      String
+  descripcion String?
+  imagen      String? // Cloudinary URL
+  orden       Int      @default(0)
+  activo      Boolean  @default(true)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  // Sin onDelete: Cascade — soft delete
+  negocio   Negocio     @relation(fields: [negocioId], references: [id])
+  parent    Categoria?  @relation("CategoriaHijos", fields: [parentId], references: [id])
+  hijos     Categoria[] @relation("CategoriaHijos")
+  productos Producto[]
+
+  @@index([negocioId])
+  @@index([parentId])
+  @@map("categorias")
+}
+
+model Producto {
+  id            String   @id @default(cuid())
+  negocioId     String
+  categoriaId   String?
+  nombre        String
+  descripcion   String?
+  precio        Decimal  @db.Decimal(10, 2)
+  precioCompare Decimal? @db.Decimal(10, 2) // precio tachado
+  sku           String?
+  stock         Int      @default(0)
+  gestionStock  Boolean  @default(false)
+  activo        Boolean  @default(true)
+  destacado     Boolean  @default(false)
+  slug          String?
+  metaTitle     String?
+  metaDesc      String?
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  // Sin onDelete: Cascade — soft delete
+  negocio   Negocio    @relation(fields: [negocioId], references: [id])
+  categoria Categoria? @relation(fields: [categoriaId], references: [id])
+
+  variantes   VarianteProducto[]
+  imagenes    ImagenProducto[]
+  atributos   AtributoProducto[]
+  pedidoItems PedidoItem[]
+
+  @@unique([negocioId, slug])
+  @@index([negocioId])
+  @@index([categoriaId])
+  @@map("productos")
+}
+
+model VarianteProducto {
+  id         String   @id @default(cuid())
+  productoId String
+  nombre     String // ej: "Talla M / Color Rojo"
+  sku        String?
+  precio     Decimal  @db.Decimal(10, 2)
+  stock      Int      @default(0)
+  imagen     String? // Cloudinary URL
+  activo     Boolean  @default(true)
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+
+  producto    Producto        @relation(fields: [productoId], references: [id])
+  valores     ValorAtributo[]
+  pedidoItems PedidoItem[]
+
+  @@index([productoId])
+  @@map("variantes_producto")
+}
+
+model Atributo {
+  id        String   @id @default(cuid())
+  nombre    String   @unique // ej: "Talla", "Color"
+  createdAt DateTime @default(now())
+
+  valores AtributoProducto[]
+
+  @@map("atributos")
+}
+
+model AtributoProducto {
+  id         String   @id @default(cuid())
+  productoId String
+  atributoId String
+  createdAt  DateTime @default(now())
+
+  producto Producto @relation(fields: [productoId], references: [id])
+  atributo Atributo @relation(fields: [atributoId], references: [id])
+
+  @@unique([productoId, atributoId])
+  @@index([productoId])
+  @@map("atributos_producto")
+}
+
+model ValorAtributo {
+  id         String   @id @default(cuid())
+  varianteId String
+  nombre     String // ej: "M", "Rojo"
+  createdAt  DateTime @default(now())
+
+  variante VarianteProducto @relation(fields: [varianteId], references: [id])
+
+  @@index([varianteId])
+  @@map("valores_atributo")
+}
+
+model ImagenProducto {
+  id          String   @id @default(cuid())
+  productoId  String
+  url         String // Cloudinary URL
+  publicId    String // Cloudinary public_id
+  alt         String?
+  orden       Int      @default(0)
+  esPrincipal Boolean  @default(false)
+  createdAt   DateTime @default(now())
+
+  producto Producto @relation(fields: [productoId], references: [id])
+
+  @@index([productoId])
+  @@map("imagenes_producto")
+}
+
+// ─────────────────────────────────────────────────────────────
+// 5. VENTAS Y PAGOS
+// ─────────────────────────────────────────────────────────────
+
+model Pedido {
+  id        String       @id @default(cuid())
+  negocioId String
+  clienteId String?
+  numero    Int
+  tipo      TipoPedido   @default(LOCAL)
+  estado    EstadoPedido @default(PENDIENTE)
+  activo    Boolean      @default(true)
+
+  // Totales
+  subtotal  Decimal @db.Decimal(10, 2)
+  descuento Decimal @default(0) @db.Decimal(10, 2)
+  impuestos Decimal @default(0) @db.Decimal(10, 2)
+  total     Decimal @db.Decimal(10, 2)
+  moneda    String  @default("MXN")
+
+  // Datos de entrega (delivery)
+  direccionEntrega String?
+  notasEntrega     String?
+  notasCliente     String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  // Sin onDelete: Cascade — soft delete
+  negocio Negocio      @relation(fields: [negocioId], references: [id])
+  cliente ClienteAuth? @relation(fields: [clienteId], references: [id])
+
+  items PedidoItem[]
+  pagos Pago[]
+
+  @@unique([negocioId, numero])
+  @@index([negocioId])
+  @@index([clienteId])
+  @@map("pedidos")
+}
+
+model PedidoItem {
+  id         String   @id @default(cuid())
+  pedidoId   String
+  productoId String?
+  varianteId String?
+  nombre     String // snapshot del nombre al momento de compra
+  precio     Decimal  @db.Decimal(10, 2)
+  cantidad   Int
+  subtotal   Decimal  @db.Decimal(10, 2)
+  notas      String?
+  createdAt  DateTime @default(now())
+
+  pedido   Pedido            @relation(fields: [pedidoId], references: [id])
+  producto Producto?         @relation(fields: [productoId], references: [id])
+  variante VarianteProducto? @relation(fields: [varianteId], references: [id])
+
+  @@index([pedidoId])
+  @@index([productoId])
+  @@map("pedido_items")
+}
+
+model Pago {
+  id              String     @id @default(cuid())
+  pedidoId        String?
+  membresiaId     String? // Si es pago de membresía
+  negocioId       String? // Para pagos de membresía, el negocio que paga
+  clienteId       String?
+  monto           Decimal    @db.Decimal(10, 2)
+  moneda          String     @default("MXN")
+  estado          EstadoPago @default(PENDIENTE)
+  metodo          MetodoPago
+  stripePaymentId String?
+  stripeChargeId  String?
+  mercadoPagoId   String?
+  recibo          String? // URL del comprobante
+  notas           String?
+  createdAt       DateTime   @default(now())
+  updatedAt       DateTime   @updatedAt
+
+  pedido  Pedido?      @relation(fields: [pedidoId], references: [id])
+  cliente ClienteAuth? @relation(fields: [clienteId], references: [id])
+
+  @@index([pedidoId])
+  @@index([clienteId])
+  @@map("pagos")
+}
+
+// ─────────────────────────────────────────────────────────────
+// 6. CLIENTES FINALES (B2C)
+// ─────────────────────────────────────────────────────────────
+
+model ClienteAuth {
+  id              String    @id @default(cuid())
+  negocioId       String
+  nombre          String
+  email           String
+  passwordHash    String?
+  googleId        String?
+  telefono        String?
+  avatar          String? // Cloudinary URL
+  emailVerificado Boolean   @default(false)
+  activo          Boolean   @default(true)
+  ultimoAcceso    DateTime?
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
+
+  negocio          Negocio             @relation(fields: [negocioId], references: [id])
+  metodosPago      MetodoPagoCliente[]
+  direcciones      DireccionCliente[]
+  datosFacturacion DatosFacturacion[]
+  pedidos          Pedido[]
+  pagos            Pago[]
+  citas            Cita[]
+  resenas          Resena[]
+
+  // Un email puede existir en múltiples negocios — único por tenant
+  @@unique([negocioId, email])
+  @@index([negocioId])
+  @@map("clientes_auth")
+}
+
+model MetodoPagoCliente {
+  id                  String   @id @default(cuid())
+  clienteId           String
+  stripeCustomerId    String?
+  stripePaymentMethod String?
+  mercadoPagoToken    String? // legacy
+  tipo                String // "tarjeta" | "transferencia"
+  ultimosCuatro       String?
+  marca               String? // "visa" | "mastercard"
+  expMes              Int?
+  expAnio             Int?
+  esDefault           Boolean  @default(false)
+  activo              Boolean  @default(true)
+  createdAt           DateTime @default(now())
+  updatedAt           DateTime @updatedAt
+
+  cliente ClienteAuth @relation(fields: [clienteId], references: [id])
+
+  @@index([clienteId])
+  @@map("metodos_pago_cliente")
+}
+
+model DireccionCliente {
+  id           String   @id @default(cuid())
+  clienteId    String
+  alias        String? // ej: "Casa", "Trabajo"
+  calle        String
+  ciudad       String
+  estado       String
+  pais         String   @default("MX")
+  codigoPostal String?
+  referencias  String?
+  latitud      Float?
+  longitud     Float?
+  esDefault    Boolean  @default(false)
+  activo       Boolean  @default(true)
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  cliente ClienteAuth @relation(fields: [clienteId], references: [id])
+
+  @@index([clienteId])
+  @@map("direcciones_cliente")
+}
+
+model DatosFacturacion {
+  id          String   @id @default(cuid())
+  clienteId   String
+  rfc         String
+  razonSocial String
+  regimen     String?
+  email       String
+  calle       String?
+  ciudad      String?
+  estado      String?
+  pais        String   @default("MX")
+  cp          String?
+  esDefault   Boolean  @default(false)
+  activo      Boolean  @default(true)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  cliente ClienteAuth @relation(fields: [clienteId], references: [id])
+
+  @@index([clienteId])
+  @@map("datos_facturacion")
+}
+
+// ─────────────────────────────────────────────────────────────
+// 7. MÓDULOS ADICIONALES
+// ─────────────────────────────────────────────────────────────
+
+model Staff {
+  id           String   @id @default(cuid())
+  negocioId    String
+  usuarioId    String? // vinculado a Usuario si tiene acceso al panel
+  nombre       String
+  especialidad String?
+  avatar       String? // Cloudinary URL
+  activo       Boolean  @default(true)
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  negocio  Negocio       @relation(fields: [negocioId], references: [id])
+  citas    Cita[]
+  reservas Reservacion[]
+  horarios Horario[]
+
+  @@index([negocioId])
+  @@map("staff")
+}
+
+model Horario {
+  id         String    @id @default(cuid())
+  negocioId  String
+  staffId    String?
+  dia        DiaSemana
+  horaInicio String // "09:00"
+  horaFin    String // "18:00"
+  activo     Boolean   @default(true)
+  createdAt  DateTime  @default(now())
+  updatedAt  DateTime  @updatedAt
+
+  negocio Negocio @relation(fields: [negocioId], references: [id])
+  staff   Staff?  @relation(fields: [staffId], references: [id])
+
+  @@index([negocioId])
+  @@index([staffId])
+  @@map("horarios")
+}
+
+model Cita {
+  id          String     @id @default(cuid())
+  negocioId   String
+  clienteId   String?
+  staffId     String?
+  servicio    String
+  descripcion String?
+  estado      EstadoCita @default(PENDIENTE)
+  activo      Boolean    @default(true)
+  inicio      DateTime
+  fin         DateTime
+  precio      Decimal?   @db.Decimal(10, 2)
+  notas       String?
+  createdAt   DateTime   @default(now())
+  updatedAt   DateTime   @updatedAt
+
+  // Sin onDelete: Cascade — soft delete
+  negocio Negocio      @relation(fields: [negocioId], references: [id])
+  cliente ClienteAuth? @relation(fields: [clienteId], references: [id])
+  staff   Staff?       @relation(fields: [staffId], references: [id])
+
+  reservas Reservacion[]
+
+  @@index([negocioId])
+  @@index([clienteId])
+  @@index([staffId])
+  @@map("citas")
+}
+
+model Reservacion {
+  id         String   @id @default(cuid())
+  citaId     String
+  staffId    String?
+  confirmada Boolean  @default(false)
+  notas      String?
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+
+  cita  Cita   @relation(fields: [citaId], references: [id])
+  staff Staff? @relation(fields: [staffId], references: [id])
+
+  @@index([citaId])
+  @@index([staffId])
+  @@map("reservaciones")
+}
+
+model Galeria {
+  id          String   @id @default(cuid())
+  negocioId   String
+  titulo      String?
+  descripcion String?
+  url         String // Cloudinary URL
+  publicId    String // Cloudinary public_id
+  tipo        String   @default("imagen") // "imagen" | "video"
+  orden       Int      @default(0)
+  activo      Boolean  @default(true)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  negocio Negocio @relation(fields: [negocioId], references: [id])
+
+  @@index([negocioId])
+  @@map("galeria")
+}
+
+model Resena {
+  id           String       @id @default(cuid())
+  negocioId    String
+  clienteId    String?
+  productoId   String?
+  calificacion Int // 1–5
+  comentario   String?
+  estado       EstadoResena @default(PENDIENTE)
+  createdAt    DateTime     @default(now())
+  updatedAt    DateTime     @updatedAt
+
+  negocio Negocio      @relation(fields: [negocioId], references: [id])
+  cliente ClienteAuth? @relation(fields: [clienteId], references: [id])
+
+  @@index([negocioId])
+  @@index([clienteId])
+  @@index([productoId])
+  @@map("resenas")
+}
+
+model FAQ {
+  id        String   @id @default(cuid())
+  negocioId String
+  pregunta  String
+  respuesta String
+  orden     Int      @default(0)
+  activo    Boolean  @default(true)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  negocio Negocio @relation(fields: [negocioId], references: [id])
+
+  @@index([negocioId])
+  @@map("faqs")
+}
+
+model RedSocial {
+  id         String   @id @default(cuid())
+  negocioId  String
+  plataforma String // "instagram" | "facebook" | "tiktok" | "youtube" | "x"
+  url        String
+  activo     Boolean  @default(true)
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+
+  negocio Negocio @relation(fields: [negocioId], references: [id])
+
+  @@index([negocioId])
+  @@map("redes_sociales")
+}
+
+model Notificacion {
+  id        String           @id @default(cuid())
+  negocioId String
+  usuarioId String?
+  clienteId String?
+  tipo      TipoNotificacion
+  titulo    String
+  cuerpo    String
+  leida     Boolean          @default(false)
+  data      Json? // payload adicional
+  createdAt DateTime         @default(now())
+
+  negocio Negocio @relation(fields: [negocioId], references: [id])
+
+  @@index([negocioId])
+  @@index([usuarioId])
+  @@index([clienteId])
+  @@map("notificaciones")
+}
+
+model Configuracion {
+  id        String   @id @default(cuid())
+  negocioId String
+  modulo    String // ej: "pedidos", "citas", "notificaciones"
+  clave     String
+  valor     Json
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  negocio Negocio @relation(fields: [negocioId], references: [id])
+
+  @@unique([negocioId, modulo, clave])
+  @@index([negocioId])
+  @@map("configuraciones")
 }
