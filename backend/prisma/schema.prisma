@@ -1,0 +1,24 @@
+// This is your Prisma schema file.
+// Learn more: https://pris.ly/d/prisma-schema
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider  = "postgresql"
+  // DATABASE_URL → pooler de Supabase (pgbouncer) — usado en runtime
+  url       = env("DATABASE_URL")
+  // DIRECT_URL  → conexión directa — usada solo en migraciones
+  directUrl = env("DIRECT_URL")
+}
+
+// ─── Modelo mínimo para probar la conexión ───────────────────────────────────
+model Negocio {
+  id        String   @id @default(cuid())
+  nombre    String
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@map("negocios")
+}

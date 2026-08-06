@@ -1,0 +1,9 @@
+{
+  "name": "frontend",
+  "version": "1.0.0",
+  "private": true,
+  "scripts": {
+    "dev": "echo 'Frontend not yet scaffolded'",
+    "build": "echo 'Frontend not yet scaffolded'"
+  }
+}

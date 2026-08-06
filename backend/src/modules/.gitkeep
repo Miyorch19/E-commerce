@@ -1,0 +1,14 @@
+// Placeholder — los módulos se organizarán aquí en forma de feature folders.
+// Ejemplo de estructura esperada:
+//
+// src/modules/
+// ├── auth/
+// │   ├── auth.controller.ts
+// │   ├── auth.service.ts
+// │   ├── auth.router.ts
+// │   └── auth.schema.ts
+// ├── negocios/
+// │   ├── negocios.controller.ts
+// │   ├── negocios.service.ts
+// │   └── negocios.router.ts
+// └── ...
