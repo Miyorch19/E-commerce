@@ -9,6 +9,7 @@ Plataforma SaaS multitenant donde cada **Negocio** (tenant) contrata una membres
 | Gestor de paquetes | pnpm |
 | Backend | Node.js + Express |
 | Frontend | React + Vite |
+| Estilos | Tailwind CSS |
 | Estado (views) | Zustand |
 | Base de datos | PostgreSQL (Supabase) |
 | ORM | Prisma |

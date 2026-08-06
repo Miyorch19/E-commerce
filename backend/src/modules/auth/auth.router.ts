@@ -6,6 +6,7 @@ import {
   loginUsuarioSchema,
   registerClienteSchema,
   refreshTokenSchema,
+  loginGoogleSchema,
 } from './auth.schema';
 
 const router: IRouter = Router();
@@ -40,6 +41,16 @@ router.post(
   '/refresh',
   validate(refreshTokenSchema),
   authController.refreshToken
+);
+
+/**
+ * POST /auth/google
+ * Login con Google Identity Services (soporta panel y tienda).
+ */
+router.post(
+  '/google',
+  validate(loginGoogleSchema),
+  authController.loginGoogle
 );
 
 /**

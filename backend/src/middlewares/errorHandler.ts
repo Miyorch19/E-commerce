@@ -16,7 +16,6 @@ export class AppError extends Error {
 interface ErrorResponse {
   status: 'error' | 'fail';
   message: string;
-  stack?: string;
 }
 
 export function errorHandler(
@@ -31,7 +30,6 @@ export function errorHandler(
     const body: ErrorResponse = {
       status: err.statusCode >= 500 ? 'error' : 'fail',
       message: err.message,
-      ...(isDev && { stack: err.stack }),
     };
     res.status(err.statusCode).json(body);
     return;
@@ -42,7 +40,6 @@ export function errorHandler(
   const body: ErrorResponse = {
     status: 'error',
     message: isDev ? err.message : 'Something went wrong. Please try again.',
-    ...(isDev && { stack: err.stack }),
   };
   res.status(500).json(body);
 }

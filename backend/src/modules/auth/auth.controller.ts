@@ -122,3 +122,32 @@ export async function me(
     next(error);
   }
 }
+
+// ─── POST /auth/google ────────────────────────────────────────────────────────
+
+/**
+ * Login con Google Identity Services (OAuth 2.0).
+ * Maneja dos contextos: "panel" (Usuarios) y "tienda" (ClienteAuth).
+ */
+export async function loginGoogle(
+  req: Request,
+  res: Response,
+  next: NextFunction
+): Promise<void> {
+  try {
+    if (!req.negocio) throw new AppError('Tenant not resolved.', 500);
+
+    const result = await authService.loginGoogle(
+      req.body,
+      req.negocio.id,
+      {
+        ip: req.ip,
+        userAgent: req.headers['user-agent'],
+      }
+    );
+
+    res.status(200).json({ status: 'ok', data: result });
+  } catch (error) {
+    next(error);
+  }
+}

@@ -1,5 +1,6 @@
 import bcrypt from 'bcryptjs';
-import { prisma } from '../../config/prisma';
+import { OAuth2Client } from 'google-auth-library';
+import { config } from '../../config/env';
 import {
   signAccessToken,
   signRefreshToken,
@@ -7,10 +8,12 @@ import {
   refreshExpiresAt,
   UsuarioTokenPayload,
 } from '../../config/jwt';
+import { prisma } from '../../config/prisma';
 import { AppError } from '../../middlewares/errorHandler';
-import { LoginUsuarioDto, RegisterClienteDto } from './auth.schema';
+import { LoginUsuarioDto, RegisterClienteDto, LoginGoogleDto } from './auth.schema';
 
 const SALT_ROUNDS = 12;
+const googleClient = new OAuth2Client(config.google.clientId);
 
 // ─── Tipos de respuesta ───────────────────────────────────────────────────────
 
@@ -233,3 +236,137 @@ export async function refreshAccessToken(
 
   throw new AppError('Unknown token type.', 401);
 }
+
+// ─────────────────────────────────────────────────────────────────────────────
+// LOGIN GOOGLE
+// ─────────────────────────────────────────────────────────────────────────────
+
+export async function loginGoogle(
+  dto: LoginGoogleDto,
+  negocioId: string,
+  meta: { ip?: string; userAgent?: string }
+): Promise<AuthTokens & { data: Record<string, unknown>; type: string }> {
+  let ticket;
+  try {
+    ticket = await googleClient.verifyIdToken({
+      idToken: dto.idToken,
+      audience: config.google.clientId,
+    });
+  } catch (err) {
+    throw new AppError('Token de Google inválido', 401);
+  }
+
+  const payload = ticket.getPayload();
+  if (!payload || !payload.email) {
+    throw new AppError('Invalid Google token.', 401);
+  }
+
+  const { email, name, sub: googleId, picture } = payload;
+
+  if (dto.contexto === 'panel') {
+    // Buscar Usuario (no se auto-registran)
+    const usuario = await prisma.usuario.findFirst({
+      where: { email, negocioId, activo: true },
+      include: { rol: true },
+    });
+
+    if (!usuario) {
+      throw new AppError('Panel user not found. Contact administrator.', 404);
+    }
+
+    // Vincular si faltaba googleId o avatar
+    if (!usuario.googleId || !usuario.avatar) {
+      await prisma.usuario.update({
+        where: { id: usuario.id },
+        data: {
+          googleId: usuario.googleId || googleId,
+          avatar: usuario.avatar || picture,
+        },
+      });
+    }
+
+    const sesion = await prisma.sesion.create({
+      data: {
+        usuarioId: usuario.id,
+        negocioId,
+        token: '',
+        expiraEl: refreshExpiresAt(),
+        ip: meta.ip,
+        userAgent: meta.userAgent,
+      },
+    });
+
+    const jwtPayload: UsuarioTokenPayload = {
+      sub: usuario.id,
+      negocioId,
+      rolId: usuario.rolId,
+      type: 'usuario',
+      sesionId: sesion.id,
+    };
+
+    const accessToken = signAccessToken(jwtPayload);
+    const refreshToken = signRefreshToken({ sub: usuario.id, type: 'usuario' });
+
+    await prisma.sesion.update({
+      where: { id: sesion.id },
+      data: { token: accessToken, refreshToken },
+    });
+
+    await prisma.usuario.update({
+      where: { id: usuario.id },
+      data: { ultimoAcceso: new Date() },
+    });
+
+    const { passwordHash: _ph, ...usuarioSafe } = usuario;
+    return { accessToken, refreshToken, data: usuarioSafe, type: 'usuario' };
+
+  } else {
+    // Buscar o crear ClienteAuth
+    let cliente = await prisma.clienteAuth.findUnique({
+      where: { negocioId_email: { negocioId, email } },
+    });
+
+    if (cliente) {
+      if (!cliente.activo) {
+        throw new AppError('Client account is inactive.', 401);
+      }
+      if (!cliente.googleId || !cliente.avatar) {
+        cliente = await prisma.clienteAuth.update({
+          where: { id: cliente.id },
+          data: {
+            googleId: cliente.googleId || googleId,
+            avatar: cliente.avatar || picture,
+            emailVerificado: true,
+          },
+        });
+      }
+    } else {
+      cliente = await prisma.clienteAuth.create({
+        data: {
+          negocioId,
+          email,
+          nombre: name || 'Google User',
+          googleId,
+          avatar: picture,
+          emailVerificado: true,
+        },
+      });
+    }
+
+    const accessToken = signAccessToken({
+      sub: cliente.id,
+      negocioId,
+      type: 'cliente',
+    });
+    const refreshToken = signRefreshToken({ sub: cliente.id, type: 'cliente' });
+
+    await prisma.clienteAuth.update({
+      where: { id: cliente.id },
+      data: { ultimoAcceso: new Date() },
+    });
+
+    const { passwordHash: _ph, ...clienteSafe } = cliente;
+    return { accessToken, refreshToken, data: clienteSafe, type: 'cliente' };
+  }
+}
+

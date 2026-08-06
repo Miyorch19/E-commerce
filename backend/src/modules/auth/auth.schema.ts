@@ -41,6 +41,19 @@ export const refreshTokenSchema = z.object({
 
 export type RefreshTokenDto = z.infer<typeof refreshTokenSchema>['body'];
 
+// ─── Login Google ─────────────────────────────────────────────────────────────
+
+export const loginGoogleSchema = z.object({
+  body: z.object({
+    idToken: requiredString('idToken is required.'),
+    contexto: z.enum(['panel', 'tienda'], {
+      error: 'Contexto must be either "panel" or "tienda".',
+    }),
+  }),
+});
+
+export type LoginGoogleDto = z.infer<typeof loginGoogleSchema>['body'];
+
 // ─── Helper: validar con Zod y lanzar 422 en fallo ───────────────────────────
 
 import { Request, Response, NextFunction } from 'express';
