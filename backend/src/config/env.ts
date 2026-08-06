@@ -10,9 +10,17 @@ function requireEnv(name: string): string {
   return value;
 }
 
+function optionalEnv(name: string, fallback = ''): string {
+  return process.env[name] ?? fallback;
+}
+
 export const config = {
   port: parseInt(process.env['PORT'] ?? '3001', 10),
   nodeEnv: process.env['NODE_ENV'] ?? 'development',
+  /** Dominio base de la plataforma, ej: "miapp.com".
+   *  Se usa para extraer el subdominio del tenant del header Host.
+   *  Dejar vacío para resolver por dominio completo o X-Tenant-Domain. */
+  baseDomain: optionalEnv('BASE_DOMAIN'),
 
   database: {
     url: requireEnv('DATABASE_URL'),
@@ -21,6 +29,10 @@ export const config = {
 
   jwt: {
     secret: requireEnv('JWT_SECRET'),
+    /** Duración del access token (stateless) */
+    accessExpiresIn: optionalEnv('JWT_ACCESS_EXPIRES', '15m'),
+    /** Duración del refresh token (almacenado en DB) */
+    refreshExpiresIn: optionalEnv('JWT_REFRESH_EXPIRES', '7d'),
   },
 
   cloudinary: {

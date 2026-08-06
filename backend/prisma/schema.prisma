@@ -397,8 +397,8 @@ model Sesion {
   revokedAt    DateTime?
   createdAt    DateTime  @default(now())
 
-  usuario Negocio @relation(fields: [negocioId], references: [id])
-  user    Usuario @relation(fields: [usuarioId], references: [id], onDelete: Cascade)
+  negocio Negocio @relation(fields: [negocioId], references: [id])
+  usuario Usuario @relation(fields: [usuarioId], references: [id], onDelete: Cascade)
 
   @@index([usuarioId])
   @@index([negocioId])

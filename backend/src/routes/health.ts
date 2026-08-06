@@ -1,7 +1,7 @@
-import { Router } from 'express';
+import { Router, IRouter } from 'express';
 import { prisma } from '../config/prisma';
 
-const router = Router();
+const router: IRouter = Router();
 
 /**
  * GET /health
