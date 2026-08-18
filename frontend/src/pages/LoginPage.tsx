@@ -1,13 +1,13 @@
 import { useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { GoogleLogin, CredentialResponse } from '@react-oauth/google'
-import { useAuthStore } from '../stores/useAuthStore'
+import { usePanelStore } from '../stores/usePanelStore'
 import { authApi } from '../api/auth'
 import axios from 'axios'
 
 export function LoginPage() {
   const navigate = useNavigate()
-  const setAuth = useAuthStore((s) => s.setAuth)
+  const setAuth = usePanelStore((s) => s.setAuth)
 
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
@@ -21,11 +21,16 @@ export function LoginPage() {
     try {
       const res = await authApi.loginUsuario({ email, password })
       const { accessToken, refreshToken, usuario } = res.data.data
-      setAuth({ token: accessToken, refreshToken, usuario, contexto: 'panel' })
+      setAuth({ token: accessToken, refreshToken, usuario })
       navigate('/dashboard')
     } catch (err: unknown) {
       if (axios.isAxiosError(err)) {
-        setError(err.response?.data?.message ?? 'Error al iniciar sesión')
+        const status = err.response?.status
+        if (status === 404) {
+          setError('Usuario no encontrado. Contacta a tu administrador.')
+        } else {
+          setError(err.response?.data?.message ?? 'Error al iniciar sesión')
+        }
       } else {
         setError('Error inesperado')
       }
@@ -43,18 +48,18 @@ export function LoginPage() {
         idToken: credentialResponse.credential,
         contexto: 'panel',
       })
-      const { accessToken, refreshToken, data } = res.data
-      setAuth({ token: accessToken, refreshToken, usuario: data, contexto: 'panel' })
+      const { accessToken, refreshToken, data: usuarioData } = res.data.data
+      setAuth({ token: accessToken, refreshToken, usuario: usuarioData })
       navigate('/dashboard')
     } catch (err: unknown) {
       if (axios.isAxiosError(err)) {
         const status = err.response?.status
-        const msg = err.response?.data?.message ?? ''
-        // 403 específico por email no verificado en Google
-        if (status === 403 && msg.toLowerCase().includes('verificado')) {
-          setError(msg)
+        if (status === 403) {
+          setError('Tu cuenta de Google no tiene el email verificado. Usa otro método de acceso.')
+        } else if (status === 404) {
+          setError('Usuario no encontrado. Contacta a tu administrador.')
         } else {
-          setError(msg || 'Error al iniciar sesión con Google')
+          setError(err.response?.data?.message || 'Error al iniciar sesión con Google')
         }
       } else {
         setError('Error inesperado con Google')

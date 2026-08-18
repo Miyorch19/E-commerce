@@ -1,12 +1,12 @@
 import { Routes, Route, NavLink, useNavigate } from 'react-router-dom'
-import { useAuthStore } from '../stores/useAuthStore'
+import { usePanelStore } from '../stores/usePanelStore'
 import { useTenantStore } from '../stores/useTenantStore'
 import { BillingSection } from '../components/BillingSection'
 import { authApi } from '../api/auth'
 
 function DashboardHome() {
   const negocio = useTenantStore((s) => s.negocio)
-  const usuario = useAuthStore((s) => s.usuario)
+  const usuario = usePanelStore((s) => s.usuario)
 
   return (
     <div className="space-y-6">
@@ -44,13 +44,18 @@ function DashboardHome() {
 
 export function DashboardPage() {
   const navigate = useNavigate()
-  const { logout, hasPermission } = useAuthStore()
+  const { logout, hasPermission } = usePanelStore()
   const canManageBilling = hasPermission('facturacion:gestionar')
 
   async function handleLogout() {
-    try { await authApi.logout() } catch { /* ignore */ }
-    logout()
-    navigate('/login')
+    try {
+      await authApi.logoutPanel()
+    } catch (err) {
+      console.error(err)
+    } finally {
+      logout()
+      navigate('/login')
+    }
   }
 
   const navItems = [

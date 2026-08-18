@@ -203,6 +203,7 @@ model PagoMembresia {
   membresia Membresia @relation(fields: [membresiaId], references: [id])
 
   @@index([membresiaId])
+  @@index([membresiaId, periodo])
   @@map("pagos_membresias")
 }
 
@@ -410,6 +411,8 @@ model Sesion {
 
   @@index([usuarioId])
   @@index([negocioId])
+  @@index([usuarioId, negocioId, revokedAt])
+  @@index([refreshToken])
   @@map("sesiones")
 }
 
@@ -457,6 +460,7 @@ model Categoria {
   productos Producto[]
 
   @@index([negocioId])
+  @@index([negocioId, activo])
   @@index([parentId])
   @@map("categorias")
 }
@@ -491,6 +495,7 @@ model Producto {
 
   @@unique([negocioId, slug])
   @@index([negocioId])
+  @@index([negocioId, activo])
   @@index([categoriaId])
   @@map("productos")
 }
@@ -604,6 +609,7 @@ model Pedido {
 
   @@unique([negocioId, numero])
   @@index([negocioId])
+  @@index([negocioId, activo])
   @@index([clienteId])
   @@map("pedidos")
 }

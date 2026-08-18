@@ -4,7 +4,7 @@ import bcrypt from 'bcryptjs';
 const prisma = new PrismaClient();
 
 const SEED_DOMINIO = 'localhost';
-const SEED_EMAIL = 'admin@test.com';
+const SEED_EMAIL = 'aldairhernandez763@gmail.com';
 const SEED_PASSWORD = 'Test1234';
 const SALT_ROUNDS = 12;
 

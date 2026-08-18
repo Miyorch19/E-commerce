@@ -2,6 +2,8 @@ import { useState } from 'react'
 import { loadStripe } from '@stripe/stripe-js'
 import { Elements, CardElement, useStripe, useElements } from '@stripe/react-stripe-js'
 import { useCartStore } from '../stores/useCartStore'
+import { useTiendaStore } from '../stores/useTiendaStore'
+import { authApi } from '../api/auth'
 import { pedidosApi } from '../api/pedidos'
 import axios from 'axios'
 
@@ -81,6 +83,18 @@ export function TiendaPage() {
   const { items, total, itemCount } = useCartStore()
   const [pedidoId] = useState<string | null>(null)
   const [paid, setPaid] = useState(false)
+  const cliente = useTiendaStore((s) => s.cliente)
+  const tiendaLogout = useTiendaStore((s) => s.logout)
+
+  async function handleLogout() {
+    try {
+      await authApi.logoutTienda()
+    } catch {
+      // Ignorar errores de red — igual limpiamos la sesión local
+    } finally {
+      tiendaLogout()
+    }
+  }
 
   return (
     <div className="min-h-screen bg-gray-950 text-white">
@@ -88,11 +102,37 @@ export function TiendaPage() {
       <header className="border-b border-white/10 bg-gray-900/80 backdrop-blur-md sticky top-0 z-10">
         <div className="max-w-6xl mx-auto px-4 h-16 flex items-center justify-between">
           <h1 className="text-xl font-bold text-indigo-400">Mi Tienda</h1>
-          <div className="flex items-center gap-2 text-sm text-gray-300">
-            <span>🛒</span>
-            <span>{itemCount()} artículos</span>
-            <span className="text-gray-600">|</span>
-            <span className="font-semibold text-white">${total().toFixed(2)}</span>
+          <div className="flex items-center gap-4">
+            {/* Cart */}
+            <div className="flex items-center gap-2 text-sm text-gray-300">
+              <span>🛒</span>
+              <span>{itemCount()} artículos</span>
+              <span className="text-gray-600">|</span>
+              <span className="font-semibold text-white">${total().toFixed(2)}</span>
+            </div>
+            {/* Auth */}
+            {cliente ? (
+              <div className="flex items-center gap-3 text-sm border-l border-white/10 pl-4">
+                <span className="text-gray-300">
+                  Hola, <span className="font-medium text-white">{cliente.nombre.split(' ')[0]}</span>
+                </span>
+                <button
+                  id="tienda-logout"
+                  onClick={handleLogout}
+                  className="text-gray-400 hover:text-red-400 transition text-xs underline underline-offset-2"
+                >
+                  Cerrar sesión
+                </button>
+              </div>
+            ) : (
+              <a
+                href="/tienda/login"
+                id="tienda-login-link"
+                className="text-sm text-indigo-400 hover:text-indigo-300 transition border-l border-white/10 pl-4"
+              >
+                Iniciar sesión
+              </a>
+            )}
           </div>
         </div>
       </header>

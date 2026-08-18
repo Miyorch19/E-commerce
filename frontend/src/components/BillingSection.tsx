@@ -6,7 +6,7 @@ import {
   useStripe,
   useElements,
 } from '@stripe/react-stripe-js'
-import { useAuthStore } from '../stores/useAuthStore'
+import { usePanelStore } from '../stores/usePanelStore'
 import { useTenantStore } from '../stores/useTenantStore'
 import { negociosApi } from '../api/negocios'
 import axios from 'axios'
@@ -91,7 +91,7 @@ function SetupForm({
  * plataforma (cobro de membresía mensual), NO para la cuenta Connect de Stripe.
  */
 export function BillingSection() {
-  const { usuario, hasPermission } = useAuthStore()
+  const { usuario, hasPermission } = usePanelStore()
   const negocio = useTenantStore((s) => s.negocio)
   const [clientSecret, setClientSecret] = useState<string | null>(null)
   const [setupDone, setSetupDone] = useState(false)

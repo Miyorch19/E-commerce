@@ -1,8 +1,6 @@
 import { create } from 'zustand'
 import { persist } from 'zustand/middleware'
 
-export type AuthContext = 'panel' | 'tienda'
-
 interface UsuarioBasico {
   id: string
   nombre: string
@@ -12,50 +10,43 @@ interface UsuarioBasico {
   permisos?: string[]
 }
 
-interface AuthState {
+interface PanelAuthState {
   token: string | null
   refreshToken: string | null
   usuario: UsuarioBasico | null
-  cliente: UsuarioBasico | null
-  contexto: AuthContext | null
 
   setAuth: (data: {
     token: string
     refreshToken: string
-    usuario?: UsuarioBasico
-    cliente?: UsuarioBasico
-    contexto: AuthContext
+    usuario: UsuarioBasico
   }) => void
   logout: () => void
   hasPermission: (permiso: string) => boolean
 }
 
-export const useAuthStore = create<AuthState>()(
+export const usePanelStore = create<PanelAuthState>()(
   persist(
     (set, get) => ({
       token: null,
       refreshToken: null,
       usuario: null,
-      cliente: null,
-      contexto: null,
 
-      setAuth({ token, refreshToken, usuario, cliente, contexto }) {
-        set({ token, refreshToken, usuario: usuario ?? null, cliente: cliente ?? null, contexto })
+      setAuth({ token, refreshToken, usuario }) {
+        set({ token, refreshToken, usuario })
       },
 
       logout() {
-        set({ token: null, refreshToken: null, usuario: null, cliente: null, contexto: null })
+        set({ token: null, refreshToken: null, usuario: null })
       },
 
       /**
        * Verifica si el usuario del panel tiene un permiso específico.
-       * Los permisos vienen del perfil devuelto por el login (field permisos[]).
        */
       hasPermission(permiso: string): boolean {
         const permisos = get().usuario?.permisos ?? []
         return permisos.includes(permiso)
       },
     }),
-    { name: 'auth-store' }
+    { name: 'panel-auth-store' }
   )
 )

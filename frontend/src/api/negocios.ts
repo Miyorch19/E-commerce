@@ -6,7 +6,7 @@ export const negociosApi = {
    * Retorna la URL del Account Link de Stripe.
    */
   stripeOnboarding: (negocioId: string) =>
-    apiClient.post<{ data: { url: string } }>(`/api/negocios/${negocioId}/stripe/onboarding`),
+    apiClient.post<{ data: { url: string } }>(`/api/negocios/${negocioId}/stripe/onboarding`, undefined, { headers: { 'X-Auth-Context': 'panel' } }),
 
   /**
    * Crea un SetupIntent en la cuenta PRINCIPAL de la plataforma
@@ -16,6 +16,8 @@ export const negociosApi = {
    */
   createBillingSetupIntent: (negocioId: string) =>
     apiClient.post<{ data: { clientSecret: string } }>(
-      `/api/negocios/${negocioId}/stripe/metodo-pago/setup-intent`
+      `/api/negocios/${negocioId}/stripe/metodo-pago/setup-intent`,
+      undefined,
+      { headers: { 'X-Auth-Context': 'panel' } }
     ),
 }

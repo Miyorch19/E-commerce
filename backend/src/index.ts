@@ -19,7 +19,13 @@ app.use(morgan(config.nodeEnv === 'development' ? 'dev' : 'combined'));
 app.use('/api/webhooks', express.raw({ type: 'application/json' }), webhooksRouter);
 
 // ─── Middlewares Globales ───────────────────────────────────────────────────
-app.use(helmet());
+app.use(helmet({
+  // "same-origin" (helmet default) blocks window.postMessage from Google
+  // Sign-In popup. "same-origin-allow-popups" keeps the protection against
+  // cross-origin window references while allowing the OAuth popup to
+  // communicate back via postMessage.
+  crossOriginOpenerPolicy: { policy: 'same-origin-allow-popups' },
+}));
 app.use(cors(dynamicCors));
 app.use(express.json()); // A partir de aquí, req.body será parseado como JSON
 app.use(express.urlencoded({ extended: true }));
