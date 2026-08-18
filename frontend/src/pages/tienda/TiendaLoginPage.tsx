@@ -29,7 +29,6 @@ export function TiendaLoginPage() {
         const { accessToken, refreshToken, data: clienteData } = res.data.data
         setAuth({ token: accessToken, refreshToken, cliente: clienteData })
       } else {
-        console.log('--- PAYLOAD REGISTRO ---', { nombre, email, password, telefono });
         const res = await authApi.registerCliente({
           nombre,
           email,
