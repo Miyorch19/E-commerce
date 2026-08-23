@@ -16,6 +16,7 @@ import negociosRouter from '../modules/negocios/negocios.router';
 import pedidosRouter from '../modules/pedidos/pedidos.router';
 import membresiasRouter from '../modules/membresias/membresias.router';
 import clientesRouter from '../modules/clientes/clientes.router';
+import cronRouter from '../cron/cron.router';
 
 // Módulo auth (login, register, refresh, logout, me)
 router.use('/auth', authRouter);
@@ -25,5 +26,8 @@ router.use('/negocios', negociosRouter);
 router.use('/pedidos', pedidosRouter);
 router.use('/membresias', membresiasRouter);
 router.use('/clientes', clientesRouter);
+
+// Módulo de administración interna (cron)
+router.use('/admin/cron', cronRouter);
 
 export default router;

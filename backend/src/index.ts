@@ -9,6 +9,7 @@ import { requestLogger, errorHandler, dynamicCors } from './middlewares';
 import router from './routes';
 import { prisma } from './config/prisma';
 import webhooksRouter from './modules/webhooks/webhooks.router';
+import { startCronJobs } from './cron/cron.service';
 
 const app = express();
 
@@ -44,6 +45,8 @@ async function bootstrap(): Promise<void> {
   try {
     await prisma.$connect();
     console.info('✅ Database connected');
+
+    startCronJobs();
 
     app.listen(config.port, () => {
       console.info(
