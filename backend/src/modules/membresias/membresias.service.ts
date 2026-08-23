@@ -33,8 +33,26 @@ export async function createStripePayment(
     );
   }
 
+  // Buscar si ya existe un intento de pago para este periodo
+  const existingPago = await prisma.pagoMembresia.findUnique({
+    where: {
+      membresiaId_periodo: {
+        membresiaId: membresia.id,
+        periodo: periodo,
+      },
+    },
+  });
+
+  // Si ya existe y está APROBADO, no hacer nada y retornar éxito.
+  if (existingPago?.estado === EstadoPago.APROBADO) {
+    return { status: 'succeeded', paymentIntentId: existingPago.stripePaymentId };
+  }
+
   const amountCents = Math.round(Number(membresia.plan.precio) * 100);
-  const idempotencyKey = `membresia_${membresia.id}_${periodo}`;
+  // La key combina membresía + periodo + método de pago, de modo que:
+  //   - Un reintento genuino (mismo periodo + misma tarjeta) reutiliza la key → Stripe deduplica.
+  //   - Un cambio de tarjeta o de periodo genera una key distinta → Stripe crea un nuevo PaymentIntent.
+  const idempotencyKey = `membresia_${membresia.id}_${periodo}_${negocio.stripeMetodoPagoId}`;
 
   try {
     const paymentIntent = await stripe.paymentIntents.create(
@@ -54,13 +72,24 @@ export async function createStripePayment(
       { idempotencyKey }
     );
 
-    // Guardar intención en PagoMembresia como APROBADO (si off_session+confirm tiene éxito sincrónico)
-    // o PENDIENTE dependiendo de cómo configure Stripe el intent, pero success es success.
-    await prisma.pagoMembresia.create({
-      data: {
+    const estadoNuevo = paymentIntent.status === 'succeeded' ? EstadoPago.APROBADO : EstadoPago.PENDIENTE;
+
+    // Actualizar registro existente o crear uno nuevo
+    await prisma.pagoMembresia.upsert({
+      where: {
+        membresiaId_periodo: {
+          membresiaId: membresia.id,
+          periodo: periodo,
+        },
+      },
+      update: {
+        estado: estadoNuevo,
+        stripePaymentId: paymentIntent.id,
+      },
+      create: {
         membresiaId: membresia.id,
         monto: membresia.plan.precio,
-        estado: paymentIntent.status === 'succeeded' ? EstadoPago.APROBADO : EstadoPago.PENDIENTE,
+        estado: estadoNuevo,
         metodo: MetodoPago.STRIPE,
         stripePaymentId: paymentIntent.id,
         periodo: periodo,
@@ -73,8 +102,18 @@ export async function createStripePayment(
     if (error.type === 'StripeCardError' && error.code === 'authentication_required') {
       const paymentIntent = error.payment_intent;
       
-      await prisma.pagoMembresia.create({
-        data: {
+      await prisma.pagoMembresia.upsert({
+        where: {
+          membresiaId_periodo: {
+            membresiaId: membresia.id,
+            periodo: periodo,
+          },
+        },
+        update: {
+          estado: EstadoPago.REQUIERE_AUTENTICACION,
+          stripePaymentId: paymentIntent?.id || null,
+        },
+        create: {
           membresiaId: membresia.id,
           monto: membresia.plan.precio,
           estado: EstadoPago.REQUIERE_AUTENTICACION,
@@ -94,8 +133,18 @@ export async function createStripePayment(
       // Otros rechazos de tarjeta (fondos insuficientes, declinada, etc.)
       const paymentIntent = error.payment_intent;
 
-      await prisma.pagoMembresia.create({
-        data: {
+      await prisma.pagoMembresia.upsert({
+        where: {
+          membresiaId_periodo: {
+            membresiaId: membresia.id,
+            periodo: periodo,
+          },
+        },
+        update: {
+          estado: EstadoPago.RECHAZADO,
+          stripePaymentId: paymentIntent?.id || null,
+        },
+        create: {
           membresiaId: membresia.id,
           monto: membresia.plan.precio,
           estado: EstadoPago.RECHAZADO,

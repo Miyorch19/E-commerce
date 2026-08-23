@@ -203,7 +203,7 @@ model PagoMembresia {
   membresia Membresia @relation(fields: [membresiaId], references: [id])
 
   @@index([membresiaId])
-  @@index([membresiaId, periodo])
+  @@unique([membresiaId, periodo])
   @@map("pagos_membresias")
 }
 
