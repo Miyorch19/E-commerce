@@ -22,9 +22,9 @@ export const authApi = {
   loginUsuario: (data: LoginPayload) =>
     apiClient.post('/api/auth/login', data, { headers: { 'X-Auth-Context': 'panel' } }),
 
-  /** Login para clientes de la tienda pública */
+  /** Login para clientes de la tienda pública — endpoint dedicado, nunca toca /auth/login del panel */
   loginCliente: (data: LoginPayload) =>
-    apiClient.post('/api/auth/login', { ...data, contexto: 'tienda' }, { headers: { 'X-Auth-Context': 'tienda' } }),
+    apiClient.post('/api/auth/login-cliente', data, { headers: { 'X-Auth-Context': 'tienda' } }),
 
   /** Registro de clientes en la tienda pública */
   registerCliente: (data: RegisterClientePayload) =>

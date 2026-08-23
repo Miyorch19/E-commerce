@@ -4,6 +4,7 @@ import { authenticate } from '../../middlewares/authenticate';
 import {
   validate,
   loginUsuarioSchema,
+  loginClienteSchema,
   registerClienteSchema,
   refreshTokenSchema,
   loginGoogleSchema,
@@ -66,5 +67,17 @@ router.post('/logout', authenticate, authController.logoutUsuario);
  * Requiere JWT válido (usuario o cliente).
  */
 router.get('/me', authenticate, authController.me);
+
+/**
+ * POST /auth/login-cliente
+ * Login exclusivo para clientes de la tienda (ClienteAuth) por email/password.
+ * Nunca autentica usuarios del panel.
+ * Requiere resolveTenant (montado en el router padre).
+ */
+router.post(
+  '/login-cliente',
+  validate(loginClienteSchema),
+  authController.loginCliente
+);
 
 export default router;

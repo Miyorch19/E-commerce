@@ -378,3 +378,48 @@ export async function loginGoogle(
   }
 }
 
+
+// -----------------------------------------------------------------------------
+// LOGIN CLIENTE — email/password para ClienteAuth (tienda B2C)
+// -----------------------------------------------------------------------------
+
+/**
+ * Autentica a un cliente de la tienda por email/password.
+ *
+ * ?  negocioId siempre proviene de req.negocio (tenant resuelto), nunca del body.
+ * ?  Usa findFirst (no findUnique) porque el índice único en ClienteAuth es parcial
+ *     (soporta soft delete con activo: Boolean).
+ */
+export async function loginCliente(
+  dto: { email: string; password: string },
+  negocioId: string
+): Promise<AuthTokens & { cliente: Record<string, unknown> }> {
+  const cliente = await prisma.clienteAuth.findFirst({
+    where: { email: dto.email, negocioId, activo: true },
+  });
+
+  // 401 genérico — no revelamos si el email existe o si el registro fue por Google
+  if (!cliente || !cliente.passwordHash) {
+    throw new AppError('Invalid credentials.', 401);
+  }
+
+  const passwordOk = await bcrypt.compare(dto.password, cliente.passwordHash);
+  if (!passwordOk) {
+    throw new AppError('Invalid credentials.', 401);
+  }
+
+  const accessToken = signAccessToken({
+    sub: cliente.id,
+    negocioId,
+    type: 'cliente',
+  });
+  const refreshToken = signRefreshToken({ sub: cliente.id, type: 'cliente' });
+
+  await prisma.clienteAuth.update({
+    where: { id: cliente.id },
+    data: { ultimoAcceso: new Date() },
+  });
+
+  const { passwordHash: _ph, ...clienteSafe } = cliente;
+  return { accessToken, refreshToken, cliente: clienteSafe };
+}

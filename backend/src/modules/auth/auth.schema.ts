@@ -78,3 +78,14 @@ export function validate(schema: ZodSchema) {
     next();
   };
 }
+
+// --- Login de cliente de tienda (email/password) ----------------------------
+
+export const loginClienteSchema = z.object({
+  body: z.object({
+    email: requiredString('Email is required.').email('Invalid email format.'),
+    password: requiredString('Password is required.'),
+  }),
+});
+
+export type LoginClienteDto = z.infer<typeof loginClienteSchema>['body'];

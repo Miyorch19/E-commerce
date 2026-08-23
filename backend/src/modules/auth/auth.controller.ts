@@ -151,3 +151,25 @@ export async function loginGoogle(
     next(error);
   }
 }
+
+// --- POST /auth/login-cliente -------------------------------------------------
+
+/**
+ * Login de clientes de la tienda por email/password.
+ * Endpoint exclusivo de ClienteAuth — nunca autentica usuarios del panel.
+ */
+export async function loginCliente(
+  req: Request,
+  res: Response,
+  next: NextFunction
+): Promise<void> {
+  try {
+    if (!req.negocio) throw new AppError('Tenant not resolved.', 500);
+
+    const result = await authService.loginCliente(req.body, req.negocio.id);
+
+    res.status(200).json({ status: 'ok', data: result });
+  } catch (error) {
+    next(error);
+  }
+}

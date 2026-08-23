@@ -163,12 +163,72 @@ async function main(): Promise<void> {
   }
   console.log(`✅ Membresía→ id: ${membresia.id}  estado: "${membresia.estado}"`);
 
+  // ── 5. Categoría de prueba ───────────────────────────────────────────────
+  let categoria = await prisma.categoria.findFirst({
+    where: { negocioId: negocio.id, nombre: 'Categoría Demo' },
+  });
+  if (!categoria) {
+    categoria = await prisma.categoria.create({
+      data: {
+        negocioId: negocio.id,
+        nombre: 'Categoría Demo',
+        descripcion: 'Categoría de productos de prueba',
+        activo: true,
+        orden: 0,
+      },
+    });
+  } else {
+    categoria = await prisma.categoria.update({
+      where: { id: categoria.id },
+      data: { descripcion: 'Categoría de productos de prueba', activo: true },
+    });
+  }
+  console.log(`✅ Categoria→ id: ${categoria.id}  nombre: "${categoria.nombre}"`);
+
+  // ── 6. Producto de prueba ────────────────────────────────────────────────
+  // Nota: Producto tiene @@unique([negocioId, slug]) — usamos findFirst + create/update
+  // igual que el resto del seed (slug no es @unique solo, es compuesto con negocioId).
+  let producto = await prisma.producto.findFirst({
+    where: { negocioId: negocio.id, slug: 'producto-demo' },
+  });
+  if (!producto) {
+    producto = await prisma.producto.create({
+      data: {
+        negocioId: negocio.id,
+        categoriaId: categoria.id,
+        nombre: 'Producto Demo',
+        descripcion: 'Producto de prueba generado por el seed',
+        precio: 250.00,
+        stock: 100,
+        gestionStock: true,
+        activo: true,
+        destacado: false,
+        slug: 'producto-demo',
+      },
+    });
+  } else {
+    producto = await prisma.producto.update({
+      where: { id: producto.id },
+      data: {
+        categoriaId: categoria.id,
+        nombre: 'Producto Demo',
+        precio: 250.00,
+        stock: 100,
+        activo: true,
+      },
+    });
+  }
+  console.log(`✅ Producto → id: ${producto.id}  nombre: "${producto.nombre}"  precio: $${producto.precio}`);
+
   console.log('\n🎉 Seed completed successfully.');
   console.log('\n─── Credenciales de prueba ───────────────────────────────');
   console.log(`   URL:      http://localhost:3001/api/auth/login`);
   console.log(`   Header:   X-Tenant-Domain: ${SEED_DOMINIO}`);
   console.log(`   Email:    ${SEED_EMAIL}`);
   console.log(`   Password: ${SEED_PASSWORD}`);
+  console.log(`   negocioId:  ${negocio.id}`);
+  console.log(`   productoId: ${producto.id}`);
+  console.log(`   categoriaId:${categoria.id}`);
   console.log('──────────────────────────────────────────────────────────\n');
 }
 
