@@ -20,7 +20,7 @@ export const config = {
   /** Dominio base de la plataforma, ej: "miapp.com".
    *  Se usa para extraer el subdominio del tenant del header Host.
    *  Dejar vacío para resolver por dominio completo o X-Tenant-Domain. */
-  baseDomain: optionalEnv('BASE_DOMAIN'),
+  baseDomain: optionalEnv('BASE_DOMAIN', 'localhost'),
 
   database: {
     url: requireEnv('DATABASE_URL'),

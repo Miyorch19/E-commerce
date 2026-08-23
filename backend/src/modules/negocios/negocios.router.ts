@@ -26,4 +26,15 @@ router.post(
   negociosController.createPlatformSetupIntent
 );
 
+/**
+ * GET /negocios/:id/stripe/estado
+ * Verifica el estado real de la cuenta en Stripe.
+ * Útil como fallback cuando el webhook account.updated no llega a tiempo.
+ */
+router.get(
+  '/:id/stripe/estado',
+  authenticate,
+  negociosController.checkStripeAccountStatus
+);
+
 export default router;

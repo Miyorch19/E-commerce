@@ -42,7 +42,7 @@ export async function createStripeOnboardingLink(
   }
 
   // 2. Generar Account Link para el onboarding
-  const origin = config.baseDomain === 'localhost' ? 'http://localhost:3000' : `https://panel.${config.baseDomain}`;
+  const origin = config.baseDomain === 'localhost' ? 'http://localhost:5173' : `https://panel.${config.baseDomain}`;
   
   const accountLink = await stripe.accountLinks.create({
     account: negocio.stripeAccountId!,
@@ -99,3 +99,26 @@ export async function createPlatformSetupIntent(
 
   return { clientSecret: setupIntent.client_secret! };
 }
+
+export async function checkStripeAccountStatus(negocioId: string) {
+  const negocio = await prisma.negocio.findUnique({ where: { id: negocioId } });
+  if (!negocio) throw new AppError('Business not found', 404);
+  if (!negocio.stripeAccountId) throw new AppError('Stripe account not linked', 400);
+
+  const account = await stripe.accounts.retrieve(negocio.stripeAccountId);
+  const isComplete = account.charges_enabled && account.details_submitted;
+
+  if (isComplete && !negocio.stripeOnboardingCompleto) {
+    await prisma.negocio.update({
+      where: { id: negocioId },
+      data: { stripeOnboardingCompleto: true }
+    });
+  }
+
+  return {
+    chargesEnabled: account.charges_enabled,
+    detailsSubmitted: account.details_submitted,
+    onboardingCompleto: isComplete || negocio.stripeOnboardingCompleto
+  };
+}
+

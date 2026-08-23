@@ -6,6 +6,8 @@ import { TiendaLoginPage } from './pages/tienda/TiendaLoginPage'
 import { TiendaCheckoutPage } from './pages/tienda/TiendaCheckoutPage'
 import { usePanelStore } from './stores/usePanelStore'
 
+import { ConfiguracionPagosExitoPage } from './pages/panel/ConfiguracionPagosExitoPage'
+
 function PrivateRoute({ children }: { children: React.ReactNode }) {
   const token = usePanelStore((s) => s.token)
   if (!token) return <Navigate to="/login" replace />
@@ -23,6 +25,14 @@ export default function App() {
           element={
             <PrivateRoute>
               <DashboardPage />
+            </PrivateRoute>
+          }
+        />
+        <Route
+          path="/configuracion/pagos/exito"
+          element={
+            <PrivateRoute>
+              <ConfiguracionPagosExitoPage />
             </PrivateRoute>
           }
         />

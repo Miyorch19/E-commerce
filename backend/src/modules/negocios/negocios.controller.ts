@@ -54,3 +54,27 @@ export async function createPlatformSetupIntent(
     next(error);
   }
 }
+
+export async function checkStripeAccountStatus(
+  req: Request,
+  res: Response,
+  next: NextFunction
+): Promise<void> {
+  try {
+    const { id } = req.params;
+
+    if (req.negocio?.id !== id) {
+      throw new AppError('Forbidden: Tenant mismatch.', 403);
+    }
+
+    if (!req.usuario) {
+      throw new AppError('Unauthorized: Panel user only.', 401);
+    }
+
+    const result = await negociosService.checkStripeAccountStatus(id);
+    res.status(200).json({ status: 'ok', data: result });
+  } catch (error) {
+    next(error);
+  }
+}
+
