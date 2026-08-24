@@ -6,6 +6,7 @@ interface UsuarioBasico {
   nombre: string
   email: string
   rolId?: string
+  negocioId?: string
   rol?: { id: string; nombre: string }
   permisos?: string[]
 }

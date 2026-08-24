@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { usePanelStore } from '../../stores/usePanelStore';
-import { api } from '../../lib/client';
+import { apiClient } from '../../api/client';
 
 export function ConfiguracionPagosExitoPage() {
   const [loading, setLoading] = useState(true);
@@ -14,7 +14,7 @@ export function ConfiguracionPagosExitoPage() {
     async function verifyStatus() {
       if (!usuario?.negocioId) return;
       try {
-        const res = await api.get(`/negocios/${usuario.negocioId}/stripe/estado`);
+        const res = await apiClient.get(`/api/negocios/${usuario.negocioId}/stripe/estado`);
         const { chargesEnabled, detailsSubmitted, onboardingCompleto } = res.data.data;
         if (chargesEnabled && detailsSubmitted && onboardingCompleto) {
           setSuccess(true);

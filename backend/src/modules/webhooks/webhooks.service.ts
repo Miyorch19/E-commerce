@@ -1,7 +1,7 @@
 import Stripe from 'stripe';
 import { prisma } from '../../config/prisma';
 import { stripe } from '../../config/stripe';
-import { EstadoPago, EstadoMembresia, Prisma } from '@prisma/client';
+import { EstadoPago, EstadoMembresia, EstadoPedido, Prisma } from '@prisma/client';
 
 export async function handleStripeWebhook(event: Stripe.Event): Promise<void> {
   try {
@@ -13,7 +13,7 @@ export async function handleStripeWebhook(event: Stripe.Event): Promise<void> {
     });
   } catch (error) {
     if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === 'P2002') {
-      console.log(`⚠️ Webhook event ${event.id} already processed. Skipping.`);
+      console.log(`⏭️ Webhook event ${event.id} already processed. Skipping.`);
       return;
     }
     throw error;
@@ -34,8 +34,12 @@ export async function handleStripeWebhook(event: Stripe.Event): Promise<void> {
             },
             data: { estado: EstadoPago.APROBADO },
           });
-          
-          // Aquí también podríamos actualizar el estado del Pedido a PAGADO
+
+          // Sincronizar el estado del Pedido a CONFIRMADO
+          await prisma.pedido.update({
+            where: { id: metadata.pedidoId },
+            data: { estado: EstadoPedido.CONFIRMADO },
+          });
         } else if (metadata && metadata.membresiaId) {
           // Es el pago de una membresía a la plataforma
           await prisma.pagoMembresia.updateMany({

@@ -1,96 +1,39 @@
-import { useState } from 'react'
-import { loadStripe } from '@stripe/stripe-js'
-import { Elements, CardElement, useStripe, useElements } from '@stripe/react-stripe-js'
+import { useState, useEffect } from 'react'
+import { Link, useNavigate } from 'react-router-dom'
 import { useCartStore } from '../stores/useCartStore'
 import { useTiendaStore } from '../stores/useTiendaStore'
 import { authApi } from '../api/auth'
-import { pedidosApi } from '../api/pedidos'
-import axios from 'axios'
-
-const stripePromise = loadStripe(import.meta.env.VITE_STRIPE_PUBLISHABLE_KEY ?? '')
-
-function CheckoutForm({ pedidoId, onSuccess }: { pedidoId: string; onSuccess: () => void }) {
-  const stripe = useStripe()
-  const elements = useElements()
-  const clearCart = useCartStore((s) => s.clearCart)
-  const [error, setError] = useState<string | null>(null)
-  const [processing, setProcessing] = useState(false)
-
-  async function handlePay(e: React.FormEvent) {
-    e.preventDefault()
-    if (!stripe || !elements) return
-
-    setError(null)
-    setProcessing(true)
-
-    try {
-      // El frontend solo envía el pedidoId — el backend recalcula el monto
-      const res = await pedidosApi.createPaymentIntent(pedidoId)
-      const { clientSecret } = res.data.data
-
-      const cardElement = elements.getElement(CardElement)!
-      const result = await stripe.confirmCardPayment(clientSecret, {
-        payment_method: { card: cardElement },
-      })
-
-      if (result.error) {
-        setError(result.error.message ?? 'Error al procesar el pago')
-      } else if (result.paymentIntent?.status === 'succeeded') {
-        clearCart()
-        onSuccess()
-      }
-    } catch (err: unknown) {
-      if (axios.isAxiosError(err)) {
-        setError(err.response?.data?.message ?? 'Error al crear el pago')
-      } else {
-        setError('Error inesperado')
-      }
-    } finally {
-      setProcessing(false)
-    }
-  }
-
-  return (
-    <form onSubmit={handlePay} className="space-y-4">
-      <div className="p-4 rounded-lg bg-gray-800 border border-gray-700">
-        <CardElement
-          options={{
-            style: {
-              base: {
-                fontSize: '16px',
-                color: '#e5e7eb',
-                '::placeholder': { color: '#6b7280' },
-              },
-            },
-          }}
-        />
-      </div>
-      {error && (
-        <p className="text-red-400 text-sm">{error}</p>
-      )}
-      <button
-        type="submit"
-        disabled={processing || !stripe}
-        className="w-full py-3 rounded-lg bg-indigo-600 hover:bg-indigo-500 text-white font-semibold transition disabled:opacity-50"
-      >
-        {processing ? 'Procesando...' : 'Pagar'}
-      </button>
-    </form>
-  )
-}
+import { productosApi, ProductoTienda } from '../api/productos'
 
 export function TiendaPage() {
-  const { items, total, itemCount } = useCartStore()
-  const [pedidoId] = useState<string | null>(null)
-  const [paid, setPaid] = useState(false)
+  const navigate = useNavigate()
+  const { items, total, itemCount, addItem } = useCartStore()
   const cliente = useTiendaStore((s) => s.cliente)
   const tiendaLogout = useTiendaStore((s) => s.logout)
+
+  const [productos, setProductos] = useState<ProductoTienda[]>([])
+  const [loading, setLoading] = useState(true)
+  const [error, setError] = useState<string | null>(null)
+
+  useEffect(() => {
+    async function loadProductos() {
+      try {
+        const res = await productosApi.getProductos()
+        setProductos(res.data.data)
+      } catch (err: any) {
+        setError(err.message || 'Error al cargar los productos')
+      } finally {
+        setLoading(false)
+      }
+    }
+    loadProductos()
+  }, [])
 
   async function handleLogout() {
     try {
       await authApi.logoutTienda()
     } catch {
-      // Ignorar errores de red — igual limpiamos la sesión local
+      // Ignorar errores de red
     } finally {
       tiendaLogout()
     }
@@ -103,13 +46,23 @@ export function TiendaPage() {
         <div className="max-w-6xl mx-auto px-4 h-16 flex items-center justify-between">
           <h1 className="text-xl font-bold text-indigo-400">Mi Tienda</h1>
           <div className="flex items-center gap-4">
-            {/* Cart */}
+            {/* Cart Header */}
             <div className="flex items-center gap-2 text-sm text-gray-300">
               <span>🛒</span>
               <span>{itemCount()} artículos</span>
               <span className="text-gray-600">|</span>
               <span className="font-semibold text-white">${total().toFixed(2)}</span>
             </div>
+            
+            {items.length > 0 && (
+              <button
+                onClick={() => navigate('/tienda/checkout')}
+                className="px-4 py-2 bg-indigo-600 hover:bg-indigo-500 rounded-lg text-sm font-semibold transition"
+              >
+                Pagar
+              </button>
+            )}
+
             {/* Auth */}
             {cliente ? (
               <div className="flex items-center gap-3 text-sm border-l border-white/10 pl-4">
@@ -125,83 +78,77 @@ export function TiendaPage() {
                 </button>
               </div>
             ) : (
-              <a
-                href="/tienda/login"
+              <Link
+                to="/tienda/login"
                 id="tienda-login-link"
                 className="text-sm text-indigo-400 hover:text-indigo-300 transition border-l border-white/10 pl-4"
               >
                 Iniciar sesión
-              </a>
+              </Link>
             )}
           </div>
         </div>
       </header>
 
       <main className="max-w-6xl mx-auto px-4 py-12">
-        {paid ? (
-          <div className="text-center py-20">
-            <div className="text-6xl mb-4">✅</div>
-            <h2 className="text-2xl font-bold text-white mb-2">¡Pago exitoso!</h2>
-            <p className="text-gray-400">Tu pedido ha sido confirmado.</p>
-          </div>
-        ) : items.length === 0 ? (
+        <h2 className="text-3xl font-bold text-white mb-8">Catálogo de Productos</h2>
+        
+        {loading ? (
+          <div className="text-center py-20 text-gray-400">Cargando productos...</div>
+        ) : error ? (
+          <div className="text-center py-20 text-red-400">{error}</div>
+        ) : productos.length === 0 ? (
           <div className="text-center py-20 text-gray-500">
-            <div className="text-5xl mb-4">🛒</div>
-            <p className="text-lg">El carrito está vacío</p>
+            <p className="text-lg">No hay productos disponibles por el momento.</p>
           </div>
         ) : (
-          <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
-            {/* Cart items */}
-            <div className="lg:col-span-2 space-y-4">
-              <h2 className="text-xl font-bold text-white">Tu carrito</h2>
-              {items.map((item) => (
-                <div
-                  key={`${item.productoId}-${item.varianteId}`}
-                  className="flex items-center gap-4 bg-gray-800/40 border border-white/10 rounded-xl p-4"
-                >
-                  <div className="w-16 h-16 rounded-lg bg-gray-700 flex items-center justify-center text-2xl shrink-0">
-                    {item.imagen ? (
-                      <img src={item.imagen} alt={item.nombre} className="w-full h-full object-cover rounded-lg" />
-                    ) : '📦'}
-                  </div>
-                  <div className="flex-1">
-                    <p className="font-medium text-white">{item.nombre}</p>
-                    <p className="text-sm text-gray-400">Cantidad: {item.cantidad}</p>
-                  </div>
-                  <div className="text-right">
-                    <p className="font-bold text-white">${(item.precio * item.cantidad).toFixed(2)}</p>
-                  </div>
+          <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-6">
+            {productos.map((producto) => (
+              <div key={producto.id} className="bg-gray-900 border border-white/10 rounded-xl overflow-hidden flex flex-col transition hover:border-white/20">
+                <div className="h-48 bg-gray-800 flex items-center justify-center relative">
+                  {producto.imagenes && producto.imagenes.length > 0 ? (
+                    <img src={producto.imagenes[0].url} alt={producto.nombre} className="w-full h-full object-cover" />
+                  ) : (
+                    <span className="text-4xl">📦</span>
+                  )}
+                  {producto.categoria && (
+                    <span className="absolute top-2 left-2 px-2 py-1 bg-black/60 backdrop-blur-sm rounded text-xs text-white">
+                      {producto.categoria.nombre}
+                    </span>
+                  )}
                 </div>
-              ))}
-            </div>
-
-            {/* Checkout */}
-            <div className="space-y-4">
-              <div className="bg-gray-900 border border-white/10 rounded-xl p-6">
-                <h3 className="font-bold text-white mb-4">Resumen del pedido</h3>
-                <div className="flex justify-between text-sm text-gray-400 mb-2">
-                  <span>Subtotal</span>
-                  <span>${total().toFixed(2)}</span>
-                </div>
-                <div className="border-t border-white/10 pt-3 flex justify-between font-bold text-white">
-                  <span>Total</span>
-                  <span>${total().toFixed(2)}</span>
+                
+                <div className="p-4 flex-1 flex flex-col">
+                  <h3 className="font-semibold text-white text-lg leading-tight mb-1">{producto.nombre}</h3>
+                  {producto.descripcion && (
+                    <p className="text-sm text-gray-400 line-clamp-2 mb-3">{producto.descripcion}</p>
+                  )}
+                  
+                  <div className="mt-auto pt-4 flex items-center justify-between">
+                    <div>
+                      <p className="font-bold text-lg text-white">${Number(producto.precio).toFixed(2)}</p>
+                      {producto.precioCompare && (
+                        <p className="text-xs text-gray-500 line-through">${Number(producto.precioCompare).toFixed(2)}</p>
+                      )}
+                    </div>
+                    
+                    <button
+                      onClick={() => addItem({
+                        productoId: producto.id,
+                        nombre: producto.nombre,
+                        precio: Number(producto.precio),
+                        cantidad: 1,
+                        imagen: producto.imagenes?.[0]?.url
+                      })}
+                      className="w-10 h-10 rounded-lg bg-indigo-600 hover:bg-indigo-500 flex items-center justify-center transition"
+                      aria-label="Agregar al carrito"
+                    >
+                      <span className="text-white">➕</span>
+                    </button>
+                  </div>
                 </div>
               </div>
-
-              {pedidoId ? (
-                <div className="bg-gray-900 border border-white/10 rounded-xl p-6">
-                  <h3 className="font-bold text-white mb-4">Pago con tarjeta</h3>
-                  <Elements stripe={stripePromise}>
-                    <CheckoutForm pedidoId={pedidoId} onSuccess={() => setPaid(true)} />
-                  </Elements>
-                </div>
-              ) : (
-                <button className="w-full py-3 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white font-semibold transition">
-                  Continuar con el pago
-                </button>
-              )}
-            </div>
+            ))}
           </div>
         )}
       </main>

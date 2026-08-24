@@ -4,6 +4,7 @@ import { DashboardPage } from './pages/DashboardPage'
 import { TiendaPage } from './pages/TiendaPage'
 import { TiendaLoginPage } from './pages/tienda/TiendaLoginPage'
 import { TiendaCheckoutPage } from './pages/tienda/TiendaCheckoutPage'
+import { TiendaPedidoConfirmacionPage } from './pages/tienda/TiendaPedidoConfirmacionPage'
 import { usePanelStore } from './stores/usePanelStore'
 
 import { ConfiguracionPagosExitoPage } from './pages/panel/ConfiguracionPagosExitoPage'
@@ -41,6 +42,7 @@ export default function App() {
         <Route path="/tienda" element={<TiendaPage />} />
         <Route path="/tienda/login" element={<TiendaLoginPage />} />
         <Route path="/tienda/checkout" element={<TiendaCheckoutPage />} />
+        <Route path="/tienda/pedido/:id/confirmacion" element={<TiendaPedidoConfirmacionPage />} />
 
         {/* Default */}
         <Route path="/" element={<Navigate to="/dashboard" replace />} />

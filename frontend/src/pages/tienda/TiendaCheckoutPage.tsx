@@ -27,13 +27,8 @@ function StripePayForm({
 }) {
   const stripe = useStripe()
   const elements = useElements()
-  const clearCart = useCartStore((s) => s.clearCart)
   const [error, setError] = useState<string | null>(null)
   const [processing, setProcessing] = useState(false)
-
-  // Suppress unused-variable warning on clientSecret — it is passed to
-  // the Elements provider via the `options` prop at render time.
-  void clientSecret
 
   async function handlePay(e: React.FormEvent) {
     e.preventDefault()
@@ -44,17 +39,13 @@ function StripePayForm({
 
     try {
       const cardElement = elements.getElement(CardElement)!
-      const result = await stripe.confirmCardPayment(
-        // clientSecret is already loaded in the Elements context
-        // but confirmCardPayment also accepts it directly if needed
-        (await pedidosApi.getClientSecret(pedidoId)).data.data.clientSecret,
-        { payment_method: { card: cardElement } }
-      )
+      const result = await stripe.confirmCardPayment(clientSecret, { 
+        payment_method: { card: cardElement } 
+      })
 
       if (result.error) {
         setError(result.error.message ?? 'Error al procesar el pago')
       } else if (result.paymentIntent?.status === 'succeeded') {
-        clearCart()
         onSuccess()
       }
     } catch (err: unknown) {
@@ -107,22 +98,22 @@ export function TiendaCheckoutPage() {
   const [pedidoId, setPedidoId] = useState<string | null>(null)
   const [clientSecret, setClientSecret] = useState<string | null>(null)
   const [creatingOrder, setCreatingOrder] = useState(false)
-  const [paid, setPaid] = useState(false)
   const [orderError, setOrderError] = useState<string | null>(null)
+  const [isCompleted, setIsCompleted] = useState(false)
 
-  // Redirect if cart is empty and not yet paid
+  // Redirect if cart is empty, unless we just completed the order
   useEffect(() => {
-    if (!paid && items.length === 0) {
+    if (!isCompleted && items.length === 0) {
       navigate('/tienda', { replace: true })
     }
-  }, [items.length, paid, navigate])
+  }, [items.length, isCompleted, navigate])
 
   async function handlePlaceOrder() {
     setOrderError(null)
     setCreatingOrder(true)
     try {
       /**
-       * 1. Create the Pedido in the backend — the backend derives the total
+       * 1. Create the Pedido in the backend – the backend derives the total
        *    from the cart items stored in DB, never from the frontend.
        */
       const orderRes = await pedidosApi.crearPedido(
@@ -136,7 +127,7 @@ export function TiendaCheckoutPage() {
 
       /**
        * 2. Ask the backend to create a PaymentIntent for this Pedido.
-       *    We only send the pedidoId — amount is computed server-side.
+       *    We only send the pedidoId – amount is computed server-side.
        */
       const piRes = await pedidosApi.createPaymentIntent(newPedidoId)
       const secret: string = piRes.data.data.clientSecret
@@ -145,31 +136,13 @@ export function TiendaCheckoutPage() {
       setClientSecret(secret)
     } catch (err: unknown) {
       if (axios.isAxiosError(err)) {
-        setOrderError(err.response?.data?.message ?? 'Error al crear el pedido')
+        setOrderError(err.response?.data?.message ?? 'Error al procesar la solicitud (¿El negocio configuró sus pagos?)')
       } else {
         setOrderError('Error inesperado')
       }
     } finally {
       setCreatingOrder(false)
     }
-  }
-
-  if (paid) {
-    return (
-      <div className="min-h-screen flex items-center justify-center bg-gray-950 text-white">
-        <div className="text-center">
-          <div className="text-7xl mb-4">✅</div>
-          <h1 className="text-3xl font-bold mb-2">¡Pago exitoso!</h1>
-          <p className="text-gray-400 mb-6">Tu pedido ha sido confirmado.</p>
-          <Link
-            to="/tienda"
-            className="inline-block px-6 py-2.5 rounded-lg bg-indigo-600 hover:bg-indigo-500 text-white font-semibold transition"
-          >
-            Seguir comprando
-          </Link>
-        </div>
-      </div>
-    )
   }
 
   return (
@@ -239,7 +212,11 @@ export function TiendaCheckoutPage() {
                   <StripePayForm
                     pedidoId={pedidoId}
                     clientSecret={clientSecret}
-                    onSuccess={() => { clearCart(); setPaid(true) }}
+                    onSuccess={() => {
+                      setIsCompleted(true)
+                      navigate(`/tienda/pedido/${pedidoId}/confirmacion`, { replace: true })
+                      clearCart()
+                    }}
                   />
                 </Elements>
               </div>
@@ -249,7 +226,7 @@ export function TiendaCheckoutPage() {
                 disabled={creatingOrder || items.length === 0}
                 className="w-full py-3 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white font-semibold transition disabled:opacity-50"
               >
-                {creatingOrder ? 'Preparando pago...' : 'Proceder al pago →'}
+                {creatingOrder ? 'Preparando pago...' : 'Proceder al pago ➔'}
               </button>
             )}
           </div>
