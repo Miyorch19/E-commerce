@@ -37,4 +37,6 @@ router.get(
   negociosController.checkStripeAccountStatus
 );
 
+router.get('/actual', authenticate, negociosController.getNegocioActual);
+
 export default router;

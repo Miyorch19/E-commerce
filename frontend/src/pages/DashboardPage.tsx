@@ -1,8 +1,10 @@
+import { useEffect } from 'react'
 import { Routes, Route, NavLink, useNavigate } from 'react-router-dom'
 import { usePanelStore } from '../stores/usePanelStore'
 import { useTenantStore } from '../stores/useTenantStore'
 import { BillingSection } from '../components/BillingSection'
 import { authApi } from '../api/auth'
+import { negociosApi } from '../api/negocios'
 
 function DashboardHome() {
   const negocio = useTenantStore((s) => s.negocio)
@@ -46,6 +48,17 @@ export function DashboardPage() {
   const navigate = useNavigate()
   const { logout, hasPermission } = usePanelStore()
   const canManageBilling = hasPermission('facturacion:gestionar')
+  
+  const negocio = useTenantStore((s) => s.negocio)
+  const setNegocio = useTenantStore((s) => s.setNegocio)
+
+  useEffect(() => {
+    if (!negocio) {
+      negociosApi.getActual()
+        .then(res => setNegocio(res.data.data))
+        .catch(err => console.error('Error fetching tenant', err))
+    }
+  }, [negocio, setNegocio])
 
   async function handleLogout() {
     try {

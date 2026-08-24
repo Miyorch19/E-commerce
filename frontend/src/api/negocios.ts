@@ -1,6 +1,9 @@
 import { apiClient } from './client'
 
 export const negociosApi = {
+  getActual: () =>
+    apiClient.get<{ data: any }>('/api/negocios/actual', { headers: { 'X-Auth-Context': 'panel' } }),
+
   /**
    * Inicia el onboarding de Stripe Connect para el negocio.
    * Retorna la URL del Account Link de Stripe.

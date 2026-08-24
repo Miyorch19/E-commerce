@@ -78,3 +78,19 @@ export async function checkStripeAccountStatus(
   }
 }
 
+
+
+export async function getNegocioActual(
+  req: Request,
+  res: Response,
+  next: NextFunction
+): Promise<void> {
+  try {
+    if (!req.negocio) {
+      throw new AppError('Tenant not resolved.', 500);
+    }
+    res.status(200).json({ status: 'ok', data: req.negocio });
+  } catch (error) {
+    next(error);
+  }
+}

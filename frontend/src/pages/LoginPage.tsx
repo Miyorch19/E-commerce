@@ -2,7 +2,9 @@ import { useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { GoogleLogin, CredentialResponse } from '@react-oauth/google'
 import { usePanelStore } from '../stores/usePanelStore'
+import { useTenantStore } from '../stores/useTenantStore'
 import { authApi } from '../api/auth'
+import { negociosApi } from '../api/negocios'
 import axios from 'axios'
 
 export function LoginPage() {
@@ -22,6 +24,14 @@ export function LoginPage() {
       const res = await authApi.loginUsuario({ email, password })
       const { accessToken, refreshToken, usuario } = res.data.data
       setAuth({ token: accessToken, refreshToken, usuario })
+      
+      try {
+        const resNegocio = await negociosApi.getActual()
+        useTenantStore.getState().setNegocio(resNegocio.data.data)
+      } catch (e) {
+        console.error('Error fetching tenant data', e)
+      }
+
       navigate('/dashboard')
     } catch (err: unknown) {
       if (axios.isAxiosError(err)) {
@@ -50,6 +60,14 @@ export function LoginPage() {
       })
       const { accessToken, refreshToken, data: usuarioData } = res.data.data
       setAuth({ token: accessToken, refreshToken, usuario: usuarioData })
+      
+      try {
+        const resNegocio = await negociosApi.getActual()
+        useTenantStore.getState().setNegocio(resNegocio.data.data)
+      } catch (e) {
+        console.error('Error fetching tenant data', e)
+      }
+
       navigate('/dashboard')
     } catch (err: unknown) {
       if (axios.isAxiosError(err)) {

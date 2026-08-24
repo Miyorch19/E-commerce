@@ -43,7 +43,7 @@ export async function loginUsuario(
       negocioId,          // filtro explÃ­cito por tenant
       activo: true,
     },
-    include: { rol: true },
+    include: { rol: { include: { permisos: { include: { permiso: true } } } } },
   });
 
   if (!usuario || !usuario.passwordHash) {
@@ -92,7 +92,14 @@ export async function loginUsuario(
     data: { ultimoAcceso: new Date() },
   });
 
-  const { passwordHash: _ph, ...usuarioSafe } = usuario;
+  const { passwordHash: _ph, rol, ...usuarioRest } = usuario;
+  const permisos = rol?.permisos?.map((rp: any) => rp.permiso.clave) || [];
+  let rolSafe = undefined;
+  if (rol) {
+    const { permisos: _p, ...restRol } = rol as any;
+    rolSafe = restRol;
+  }
+  const usuarioSafe = { ...usuarioRest, rol: rolSafe, permisos };
 
   return { accessToken, refreshToken, usuario: usuarioSafe };
 }
@@ -166,7 +173,7 @@ export async function logoutUsuario(sesionId: string): Promise<void> {
 export async function refreshAccessToken(
   refreshToken: string,
   negocioId: string
-): Promise<{ accessToken: string }> {
+): Promise<{ accessToken: string; usuario?: Record<string, unknown> }> {
   let payload;
   try {
     payload = verifyToken(refreshToken);
@@ -194,7 +201,7 @@ export async function refreshAccessToken(
 
     const usuario = await prisma.usuario.findFirst({
       where: { id: payload.sub, negocioId, activo: true },
-      include: { rol: true },
+      include: { rol: { include: { permisos: { include: { permiso: true } } } } },
     });
 
     if (!usuario) throw new AppError('User not found.', 401);
@@ -215,7 +222,16 @@ export async function refreshAccessToken(
       data: { token: accessToken },
     });
 
-    return { accessToken };
+    const { passwordHash: _ph, rol, ...usuarioRest } = usuario;
+    const permisos = rol?.permisos?.map((rp: any) => rp.permiso.clave) || [];
+    let rolSafe = undefined;
+    if (rol) {
+      const { permisos: _p, ...restRol } = rol as any;
+      rolSafe = restRol;
+    }
+    const usuarioSafe = { ...usuarioRest, rol: rolSafe, permisos };
+
+    return { accessToken, usuario: usuarioSafe };
   }
 
   if (payload.type === 'cliente') {
@@ -277,7 +293,7 @@ export async function loginGoogle(
     // Buscar Usuario (no se auto-registran)
     const usuario = await prisma.usuario.findFirst({
       where: { email, negocioId, activo: true },
-      include: { rol: true },
+      include: { rol: { include: { permisos: { include: { permiso: true } } } } },
     });
 
     if (!usuario) {
@@ -327,7 +343,14 @@ export async function loginGoogle(
       data: { ultimoAcceso: new Date() },
     });
 
-    const { passwordHash: _ph, ...usuarioSafe } = usuario;
+    const { passwordHash: _ph, rol, ...usuarioRest } = usuario;
+    const permisos = rol?.permisos?.map((rp: any) => rp.permiso.clave) || [];
+    let rolSafe = undefined;
+    if (rol) {
+      const { permisos: _p, ...restRol } = rol as any;
+      rolSafe = restRol;
+    }
+    const usuarioSafe = { ...usuarioRest, rol: rolSafe, permisos };
     return { accessToken, refreshToken, data: usuarioSafe, type: 'usuario' };
 
   } else {
@@ -380,14 +403,14 @@ export async function loginGoogle(
 
 
 // -----------------------------------------------------------------------------
-// LOGIN CLIENTE — email/password para ClienteAuth (tienda B2C)
+// LOGIN CLIENTE ï¿½ email/password para ClienteAuth (tienda B2C)
 // -----------------------------------------------------------------------------
 
 /**
  * Autentica a un cliente de la tienda por email/password.
  *
  * ?  negocioId siempre proviene de req.negocio (tenant resuelto), nunca del body.
- * ?  Usa findFirst (no findUnique) porque el índice único en ClienteAuth es parcial
+ * ?  Usa findFirst (no findUnique) porque el ï¿½ndice ï¿½nico en ClienteAuth es parcial
  *     (soporta soft delete con activo: Boolean).
  */
 export async function loginCliente(
@@ -398,7 +421,7 @@ export async function loginCliente(
     where: { email: dto.email, negocioId, activo: true },
   });
 
-  // 401 genérico — no revelamos si el email existe o si el registro fue por Google
+  // 401 genï¿½rico ï¿½ no revelamos si el email existe o si el registro fue por Google
   if (!cliente || !cliente.passwordHash) {
     throw new AppError('Invalid credentials.', 401);
   }
