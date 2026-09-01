@@ -68,6 +68,14 @@ enum EstadoCita {
   NO_SHOW
 }
 
+enum EstadoReservacion {
+  PENDIENTE
+  CONFIRMADA
+  CANCELADA
+  COMPLETADA
+  NO_SHOW
+}
+
 enum TipoNotificacion {
   EMAIL
   SMS
@@ -202,8 +210,8 @@ model PagoMembresia {
 
   membresia Membresia @relation(fields: [membresiaId], references: [id])
 
-  @@index([membresiaId])
   @@unique([membresiaId, periodo])
+  @@index([membresiaId])
   @@map("pagos_membresias")
 }
 
@@ -245,6 +253,9 @@ model Negocio {
   stripeCustomerId   String?
   stripeMetodoPagoId String?
 
+  // Restaurante
+  duracionMinutos Int @default(120) // duración estándar de reservación en minutos
+
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
@@ -269,6 +280,8 @@ model Negocio {
   redesSociales   RedSocial[]
   notificaciones  Notificacion[]
   configuraciones Configuracion[]
+  zonas           ZonaRestaurante[]
+  reservaciones   Reservacion[]
 
   @@map("negocios")
 }
@@ -689,6 +702,7 @@ model ClienteAuth {
   pagos            Pago[]
   citas            Cita[]
   resenas          Resena[]
+  reservaciones    Reservacion[]
 
   // Un email puede existir en múltiples negocios — único por tenant
   // El constraint único parcial de negocioId_email (activo=true) se maneja mediante SQL manual
@@ -836,20 +850,49 @@ model Cita {
   @@map("citas")
 }
 
+model ZonaRestaurante {
+  id              String   @id @default(cuid())
+  negocioId       String
+  nombre          String // ej. "Terraza", "Interior", "Pasillo"
+  descripcion     String?
+  capacidadMaxima Int // número máximo de personas simultáneas en esta zona
+  activo          Boolean  @default(true)
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  negocio       Negocio       @relation(fields: [negocioId], references: [id])
+  reservaciones Reservacion[]
+
+  @@index([negocioId])
+  @@map("zonas_restaurante")
+}
+
 model Reservacion {
-  id         String   @id @default(cuid())
-  citaId     String
-  staffId    String?
-  confirmada Boolean  @default(false)
-  notas      String?
-  createdAt  DateTime @default(now())
-  updatedAt  DateTime @updatedAt
+  id             String            @id @default(cuid())
+  negocioId      String
+  clienteId      String
+  zonaId         String
+  fecha          DateTime          @db.Date
+  horaInicio     String // ej. "20:00"
+  numeroPersonas Int
+  estado         EstadoReservacion @default(PENDIENTE)
+  notas          String?
+  activo         Boolean           @default(true)
+  createdAt      DateTime          @default(now())
+  updatedAt      DateTime          @updatedAt
 
-  cita  Cita   @relation(fields: [citaId], references: [id])
-  staff Staff? @relation(fields: [staffId], references: [id])
+  negocio Negocio         @relation(fields: [negocioId], references: [id])
+  cliente ClienteAuth     @relation(fields: [clienteId], references: [id])
+  zona    ZonaRestaurante @relation(fields: [zonaId], references: [id])
+  Staff   Staff?          @relation(fields: [staffId], references: [id])
+  staffId String?
+  Cita    Cita?           @relation(fields: [citaId], references: [id])
+  citaId  String?
 
-  @@index([citaId])
-  @@index([staffId])
+  @@index([negocioId])
+  @@index([clienteId])
+  @@index([zonaId])
+  @@index([negocioId, zonaId, fecha])
   @@map("reservaciones")
 }
 

@@ -23,7 +23,7 @@ async function main(): Promise<void> {
       where: { id: negocio.id },
       data: {
         nombre: 'Negocio Demo',
-        tipo: TipoNegocio.TIENDA,
+        tipo: TipoNegocio.RESTAURANTE,
       },
     });
   } else {
@@ -31,7 +31,7 @@ async function main(): Promise<void> {
       data: {
         nombre: 'Negocio Demo',
         dominio: SEED_DOMINIO,
-        tipo: TipoNegocio.TIENDA,
+        tipo: TipoNegocio.RESTAURANTE,
         activo: true,
         email: 'demo@negocio.com',
         telefono: '+521234567890',
@@ -40,7 +40,38 @@ async function main(): Promise<void> {
     });
   }
 
-  console.log(`✅ Negocio  → id: ${negocio.id}  dominio: "${negocio.dominio}"`);
+  console.log(`\n• Negocio  → id: ${negocio.id}  dominio: "${negocio.dominio}"`);
+
+  // 1.5 Tema
+  let tema = await prisma.tema.findUnique({
+    where: { negocioId: negocio.id },
+  });
+  if (tema) {
+    tema = await prisma.tema.update({
+      where: { negocioId: negocio.id },
+      data: {
+        plantilla: 'restaurante-clasico',
+        colorPrimario: '#FEFCEA',
+        colorSecundario: '#0D0D0D',
+        colorAcento: '#E62235',
+        fontPrimaria: 'Instrument Serif',
+        fontSecundaria: 'Lilex',
+      },
+    });
+  } else {
+    tema = await prisma.tema.create({
+      data: {
+        negocioId: negocio.id,
+        plantilla: 'restaurante-clasico',
+        colorPrimario: '#FEFCEA',
+        colorSecundario: '#0D0D0D',
+        colorAcento: '#E62235',
+        fontPrimaria: 'Instrument Serif',
+        fontSecundaria: 'Lilex',
+      },
+    });
+  }
+  console.log(`• Tema     → Actualizado/creado plantilla: ${tema.plantilla}`);
 
   // ── 2a. Permisos ────────────────────────────────────────────────────────────
   const permisosRequeridos = [
@@ -51,7 +82,9 @@ async function main(): Promise<void> {
     'productos:crear',
     'productos:editar',
     'productos:eliminar',
-    'usuarios:gestionar'
+    'usuarios:gestionar',
+    'reservaciones:gestionar',
+    'zonas:gestionar',
   ];
 
   const permisosIds: string[] = [];
@@ -219,6 +252,23 @@ async function main(): Promise<void> {
     });
   }
   console.log(`✅ Producto → id: ${producto.id}  nombre: "${producto.nombre}"  precio: $${producto.precio}`);
+
+  // 7. Imagen del producto
+  let imagen = await prisma.imagenProducto.findFirst({
+    where: { productoId: producto.id }
+  });
+  if (!imagen) {
+    await prisma.imagenProducto.create({
+      data: {
+        productoId: producto.id,
+        url: 'https://res.cloudinary.com/dwvegpaaf/image/upload/v1785124354/PIZZA1_nsjuhx.jpg',
+        publicId: 'PIZZA1_nsjuhx',
+        alt: 'Pizza Margarita',
+        orden: 1,
+        esPrincipal: true
+      }
+    });
+  }
 
   console.log('\n🎉 Seed completed successfully.');
   console.log('\n─── Credenciales de prueba ───────────────────────────────');

@@ -2,11 +2,16 @@ import { create } from 'zustand'
 import { persist } from 'zustand/middleware'
 
 interface Tema {
-  id: string
-  nombre: string
-  colorPrimario?: string
-  colorSecundario?: string
-  fuente?: string
+  plantilla: string
+  colorPrimario: string
+  colorSecundario: string
+  colorAcento?: string
+  fontPrimaria: string
+  fontSecundaria?: string
+  borderRadius: string
+  logoUrl?: string
+  faviconUrl?: string
+  tokens?: { clave: string, valor: string }[]
 }
 
 interface Negocio {

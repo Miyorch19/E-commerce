@@ -1,6 +1,9 @@
 import { apiClient } from './client'
 
 export const negociosApi = {
+  getTema: () =>
+    apiClient.get<{ data: any }>('/api/tienda/tema'),
+
   getActual: () =>
     apiClient.get<{ data: any }>('/api/negocios/actual', { headers: { 'X-Auth-Context': 'panel' } }),
 

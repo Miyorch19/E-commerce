@@ -5,6 +5,8 @@ import { TiendaPage } from './pages/TiendaPage'
 import { TiendaLoginPage } from './pages/tienda/TiendaLoginPage'
 import { TiendaCheckoutPage } from './pages/tienda/TiendaCheckoutPage'
 import { TiendaPedidoConfirmacionPage } from './pages/tienda/TiendaPedidoConfirmacionPage'
+import { TiendaRoot } from './pages/tienda/PlantillaSelector'
+import { ThemeProvider } from './components/ThemeProvider'
 import { usePanelStore } from './stores/usePanelStore'
 
 import { ConfiguracionPagosExitoPage } from './pages/panel/ConfiguracionPagosExitoPage'
@@ -18,6 +20,7 @@ function PrivateRoute({ children }: { children: React.ReactNode }) {
 export default function App() {
   return (
     <BrowserRouter>
+      <ThemeProvider>
       <Routes>
         {/* Panel admin */}
         <Route path="/login" element={<LoginPage />} />
@@ -39,16 +42,16 @@ export default function App() {
         />
 
         {/* Tienda pública */}
-        <Route path="/tienda" element={<TiendaPage />} />
         <Route path="/tienda/login" element={<TiendaLoginPage />} />
         <Route path="/tienda/checkout" element={<TiendaCheckoutPage />} />
         <Route path="/tienda/pedido/:id/confirmacion" element={<TiendaPedidoConfirmacionPage />} />
+        <Route path="/tienda/*" element={<TiendaRoot />} />
 
         {/* Default */}
         <Route path="/" element={<Navigate to="/dashboard" replace />} />
         <Route path="*" element={<Navigate to="/" replace />} />
       </Routes>
+      </ThemeProvider>
     </BrowserRouter>
   )
 }
-
