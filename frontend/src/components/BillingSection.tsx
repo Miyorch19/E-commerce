@@ -6,9 +6,19 @@ import {
   useStripe,
   useElements,
 } from '@stripe/react-stripe-js'
+import {
+  CreditCard,
+  CheckCircle2,
+  AlertTriangle,
+  Lightbulb,
+  User,
+  RefreshCw,
+  Plus,
+} from 'lucide-react'
 import { usePanelStore } from '../stores/usePanelStore'
 import { useTenantStore } from '../stores/useTenantStore'
 import { negociosApi } from '../api/negocios'
+import { Card, CardHeader, CardTitle, CardDescription, CardContent, Button, Badge } from './ui'
 import axios from 'axios'
 
 const stripePromise = loadStripe(import.meta.env.VITE_STRIPE_PUBLISHABLE_KEY ?? '')
@@ -50,45 +60,48 @@ function SetupForm({
   if (done) {
     return (
       <div className="text-center py-6">
-        <div className="text-4xl mb-2">✅</div>
-        <p className="text-green-400 font-medium">Tarjeta guardada correctamente</p>
+        <CheckCircle2 className="w-12 h-12 text-emerald-500 mx-auto mb-2" />
+        <p className="text-emerald-700 font-semibold text-sm">Tarjeta guardada correctamente</p>
       </div>
     )
   }
 
   return (
     <form onSubmit={handleSubmit} className="space-y-4">
-      <div className="p-4 rounded-lg bg-gray-800 border border-gray-700">
+      <div className="p-4 rounded-xl bg-slate-50 border border-slate-200">
         <CardElement
           options={{
             style: {
               base: {
-                fontSize: '16px',
-                color: '#e5e7eb',
-                '::placeholder': { color: '#6b7280' },
+                fontSize: '15px',
+                color: '#0f172a',
+                '::placeholder': { color: '#94a3b8' },
               },
             },
           }}
         />
       </div>
-      {error && <p className="text-red-400 text-sm">{error}</p>}
-      <button
+      {error && (
+        <div className="p-3 rounded-lg bg-rose-50 border border-rose-200 text-rose-700 text-xs font-medium flex items-center gap-2">
+          <AlertTriangle className="w-4 h-4 shrink-0" />
+          {error}
+        </div>
+      )}
+      <Button
         type="submit"
-        disabled={processing || !stripe}
-        className="w-full py-2.5 rounded-lg bg-indigo-600 hover:bg-indigo-500 text-white font-semibold transition disabled:opacity-50"
+        variant="primary"
+        loading={processing}
+        disabled={!stripe}
+        className="w-full"
       >
-        {processing ? 'Guardando...' : 'Guardar tarjeta'}
-      </button>
+        Guardar tarjeta
+      </Button>
     </form>
   )
 }
 
 /**
  * BillingSection — sección de facturación del panel admin.
- *
- * Solo se renderiza si el usuario tiene el permiso "facturacion:gestionar".
- * Esta lógica de guardado es para la tarjeta de la cuenta PRINCIPAL de la
- * plataforma (cobro de membresía mensual), NO para la cuenta Connect de Stripe.
  */
 export function BillingSection() {
   const { usuario, hasPermission } = usePanelStore()
@@ -100,16 +113,24 @@ export function BillingSection() {
 
   const canAccess = hasPermission('facturacion:gestionar')
 
-  // Si no tiene el permiso, muestra el componente deshabilitado con explicación
   if (!canAccess) {
     return (
-      <div className="space-y-4">
-        <h2 className="text-2xl font-bold text-white">Método de pago de facturación</h2>
-        <div className="bg-gray-800/40 border border-yellow-500/30 rounded-xl p-6">
-          <p className="text-yellow-400 text-sm">
-            ⚠️ No tienes el permiso <code className="bg-gray-700 px-1 rounded">facturacion:gestionar</code> para acceder a esta sección. Contacta al administrador del negocio.
-          </p>
+      <div className="space-y-6">
+        <div>
+          <h2 className="text-xl font-bold text-slate-900">Método de pago de facturación</h2>
         </div>
+        <Card className="border-amber-200 bg-amber-50/50">
+          <CardContent className="p-5 flex items-start gap-3 text-amber-800 text-sm">
+            <AlertTriangle className="w-5 h-5 text-amber-600 shrink-0 mt-0.5" />
+            <div>
+              <span className="font-semibold">Acceso restringido:</span> No tienes el permiso{' '}
+              <code className="bg-amber-100 text-amber-900 px-1.5 py-0.5 rounded text-xs font-mono">
+                facturacion:gestionar
+              </code>{' '}
+              para acceder a esta sección. Contacta al administrador del negocio.
+            </div>
+          </CardContent>
+        </Card>
       </div>
     )
   }
@@ -135,63 +156,75 @@ export function BillingSection() {
   return (
     <div className="space-y-6">
       <div>
-        <h2 className="text-2xl font-bold text-white">Método de pago de facturación</h2>
-        <p className="text-gray-400 text-sm mt-1">
+        <h2 className="text-xl font-bold text-slate-900 tracking-tight">Método de pago de facturación</h2>
+        <p className="text-slate-500 text-sm mt-1">
           Esta tarjeta se usará para el cobro mensual de tu membresía en la plataforma.
           Es independiente de tu cuenta de Stripe Connect para recibir pagos de clientes.
         </p>
       </div>
 
-      <div className="bg-gray-900 border border-white/10 rounded-xl p-6 max-w-lg space-y-5">
-        {/* Info del usuario */}
-        <div className="flex items-center gap-3 pb-4 border-b border-white/10">
-          <div className="w-10 h-10 rounded-full bg-indigo-600 flex items-center justify-center text-sm font-bold">
-            {usuario?.nombre?.[0]?.toUpperCase() ?? 'A'}
-          </div>
-          <div>
-            <p className="font-medium text-white">{usuario?.nombre}</p>
-            <p className="text-sm text-gray-400">{usuario?.email}</p>
-          </div>
-        </div>
-
-        {setupDone ? (
-          <div className="text-center py-4">
-            <div className="text-4xl mb-2">✅</div>
-            <p className="text-green-400 font-medium">Tarjeta de facturación configurada</p>
-            <p className="text-gray-500 text-sm mt-1">
-              El equipo de la plataforma la usará para tus cobros mensuales.
-            </p>
-            <button
-              onClick={() => { setSetupDone(false); setClientSecret(null) }}
-              className="mt-4 text-sm text-indigo-400 hover:text-indigo-300 transition"
-            >
-              Cambiar tarjeta
-            </button>
-          </div>
-        ) : clientSecret ? (
-          <Elements stripe={stripePromise} options={{ clientSecret }}>
-            <SetupForm clientSecret={clientSecret} onSuccess={() => setSetupDone(true)} />
-          </Elements>
-        ) : (
-          <div className="space-y-4">
-            <div className="rounded-lg bg-blue-950/40 border border-blue-500/30 p-4 text-blue-300 text-sm">
-              💡 Al agregar una tarjeta, autorizas a la plataforma a cobrar tu membresía mensual automáticamente.
+      <Card className="max-w-lg">
+        <CardContent className="space-y-5 p-6">
+          {/* Info del usuario */}
+          <div className="flex items-center gap-3 pb-4 border-b border-slate-100">
+            <div className="w-10 h-10 rounded-full bg-slate-100 border border-slate-200 flex items-center justify-center text-slate-700 font-semibold text-sm">
+              {usuario?.nombre?.[0]?.toUpperCase() ?? <User className="w-5 h-5 text-slate-500" />}
             </div>
-            {error && (
-              <div className="rounded-lg bg-red-900/30 border border-red-500/30 p-3 text-red-300 text-sm">
-                {error}
-              </div>
-            )}
-            <button
-              onClick={handleInitSetup}
-              disabled={loading}
-              className="w-full py-2.5 rounded-lg bg-indigo-600 hover:bg-indigo-500 text-white font-semibold transition disabled:opacity-50"
-            >
-              {loading ? 'Preparando...' : 'Agregar tarjeta de facturación'}
-            </button>
+            <div>
+              <p className="font-semibold text-slate-900 text-sm">{usuario?.nombre}</p>
+              <p className="text-xs text-slate-500">{usuario?.email}</p>
+            </div>
           </div>
-        )}
-      </div>
+
+          {setupDone ? (
+            <div className="text-center py-4 space-y-3">
+              <CheckCircle2 className="w-12 h-12 text-emerald-500 mx-auto" />
+              <div>
+                <p className="text-slate-900 font-semibold text-base">Tarjeta de facturación configurada</p>
+                <p className="text-slate-500 text-xs mt-1">
+                  El equipo de la plataforma la usará para tus cobros mensuales.
+                </p>
+              </div>
+              <Button
+                variant="outline"
+                size="sm"
+                icon={<RefreshCw className="w-3.5 h-3.5" />}
+                onClick={() => { setSetupDone(false); setClientSecret(null) }}
+              >
+                Cambiar tarjeta
+              </Button>
+            </div>
+          ) : clientSecret ? (
+            <Elements stripe={stripePromise} options={{ clientSecret }}>
+              <SetupForm clientSecret={clientSecret} onSuccess={() => setSetupDone(true)} />
+            </Elements>
+          ) : (
+            <div className="space-y-4">
+              <div className="rounded-xl bg-sky-50/80 border border-sky-200/80 p-4 text-sky-800 text-xs flex items-start gap-2.5">
+                <Lightbulb className="w-4 h-4 text-sky-600 shrink-0 mt-0.5" />
+                <span>
+                  Al agregar una tarjeta, autorizas a la plataforma a cobrar tu membresía mensual automáticamente.
+                </span>
+              </div>
+              {error && (
+                <div className="rounded-lg bg-rose-50 border border-rose-200 p-3 text-rose-700 text-xs font-medium flex items-center gap-2">
+                  <AlertTriangle className="w-4 h-4 shrink-0" />
+                  {error}
+                </div>
+              )}
+              <Button
+                variant="primary"
+                loading={loading}
+                icon={<CreditCard className="w-4 h-4" />}
+                onClick={handleInitSetup}
+                className="w-full"
+              >
+                Agregar tarjeta de facturación
+              </Button>
+            </div>
+          )}
+        </CardContent>
+      </Card>
     </div>
   )
 }

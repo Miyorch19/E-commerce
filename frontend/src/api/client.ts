@@ -35,11 +35,19 @@ export const apiClient = axios.create({
 
 // --- Request interceptor: attach JWT + tenant header -----------------------
 apiClient.interceptors.request.use((config) => {
-  const authContext = config.headers['X-Auth-Context']
-  
-  // Save context for the response interceptor before deleting it from headers
-  ;(config as any)._authContext = authContext;
-  
+  const getHeader = (name: string) => {
+    if (config.headers?.get) return config.headers.get(name) as string
+    return (config.headers?.[name] || config.headers?.[name.toLowerCase()]) as string
+  }
+
+  const headerContext = getHeader('X-Auth-Context')
+  const authContext =
+    (config as any)._authContext ||
+    headerContext ||
+    (config.url?.includes('/panel') ? 'panel' : undefined)
+
+  ;(config as any)._authContext = authContext
+
   if (authContext === 'panel') {
     const token = usePanelStore.getState().token
     if (token) config.headers.Authorization = `Bearer ${token}`
@@ -47,9 +55,13 @@ apiClient.interceptors.request.use((config) => {
     const token = useTiendaStore.getState().token
     if (token) config.headers.Authorization = `Bearer ${token}`
   }
-  
-  // Remove the custom header so it doesn't get sent to the backend
-  delete config.headers['X-Auth-Context']
+
+  if (config.headers?.delete) {
+    config.headers.delete('X-Auth-Context')
+  } else {
+    delete config.headers['X-Auth-Context']
+    delete config.headers['x-auth-context']
+  }
 
   config.headers['X-Tenant-Domain'] = getTenantDomain()
   return config
@@ -75,30 +87,16 @@ apiClient.interceptors.response.use(
   async (error) => {
     const originalRequest = error.config
 
-    // Only attempt refresh once per request (_retry flag) and only on 401
-    // Note: the original custom header X-Auth-Context was removed, but we can inspect if it had a token 
-    // or we can pass the context through a custom config property.
-    // To preserve it, we'll read it from originalRequest._authContext if we save it, 
-    // or we can just try to refresh based on which store has a refreshToken that matches the context we want.
-    // Actually, let's look at the original URL or we can inject it via originalRequest object.
-    
-    // Better way: interceptors.request can save the context on config:
-    // We already do this: originalRequest._authContext is not defined yet. Let's rely on checking the request URL or passing it.
-    
     if (error.response?.status === 401 && !originalRequest._retry) {
-      // Determine context from originalRequest
-      // If we deleted X-Auth-Context from headers, we can't read it from headers.
-      // We will check the original request URL, or we can use a custom property on config.
-      // Wait! We can just define `authContext` inside request and save it on `config._authContext = authContext`.
-      // Let's assume we saved it.
-      const authContext = originalRequest._authContext
+      const authContext =
+        originalRequest._authContext ||
+        (originalRequest.url?.includes('/panel') ? 'panel' : undefined)
 
       if (!authContext) {
-        return Promise.reject(error) // No context = no refresh attempt
+        return Promise.reject(error)
       }
 
       if (isRefreshing) {
-        // Queue the request until the ongoing refresh resolves
         return new Promise((resolve, reject) => {
           pendingQueue.push({
             resolve: (token: string) => {
@@ -114,7 +112,8 @@ apiClient.interceptors.response.use(
       isRefreshing = true
 
       try {
-        const store = authContext === 'panel' ? usePanelStore.getState() : useTiendaStore.getState()
+        const store =
+          authContext === 'panel' ? usePanelStore.getState() : useTiendaStore.getState()
         const { refreshToken } = store
         if (!refreshToken) throw new Error('No refresh token')
 
@@ -149,7 +148,7 @@ apiClient.interceptors.response.use(
         return apiClient(originalRequest)
       } catch (refreshError) {
         processQueue(refreshError, null)
-        
+
         if (authContext === 'panel') {
           usePanelStore.getState().logout()
           window.location.href = '/login'

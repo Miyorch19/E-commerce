@@ -2,6 +2,7 @@ import Stripe from 'stripe';
 import { prisma } from '../../config/prisma';
 import { stripe } from '../../config/stripe';
 import { EstadoPago, EstadoMembresia, EstadoPedido, Prisma } from '@prisma/client';
+import { invalidateNegocioCache } from '../../middlewares/resolveTenant';
 
 export async function handleStripeWebhook(event: Stripe.Event): Promise<void> {
   try {
@@ -89,6 +90,7 @@ export async function handleStripeWebhook(event: Stripe.Event): Promise<void> {
                 where: { id: metadata.negocioId },
                 data: { stripeMetodoPagoId: paymentMethod.id },
               });
+              invalidateNegocioCache(metadata.negocioId);
             }
           }
         }
@@ -129,10 +131,15 @@ export async function handleStripeConnectWebhook(event: Stripe.Event): Promise<v
       const account = event.data.object as Stripe.Account;
       // Stripe manda `details_submitted: true` cuando el onboarding básico está listo
       if (account.details_submitted) {
+        const negocios = await prisma.negocio.findMany({
+          where: { stripeAccountId: account.id },
+          select: { id: true },
+        });
         await prisma.negocio.updateMany({
           where: { stripeAccountId: account.id },
           data: { stripeOnboardingCompleto: true },
         });
+        negocios.forEach((n) => invalidateNegocioCache(n.id));
       }
       break;
     }

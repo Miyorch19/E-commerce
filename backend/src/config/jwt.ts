@@ -27,7 +27,7 @@ export function signAccessToken(payload: TokenPayload): string {
   });
 }
 
-export function signRefreshToken(payload: Pick<TokenPayload, 'sub' | 'type'>): string {
+export function signRefreshToken(payload: Pick<TokenPayload, 'sub' | 'type' | 'negocioId'>): string {
   return jwt.sign(payload, config.jwt.secret, {
     expiresIn: config.jwt.refreshExpiresIn as jwt.SignOptions['expiresIn'],
   });

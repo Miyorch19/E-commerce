@@ -3,6 +3,31 @@ import { JsonWebTokenError, TokenExpiredError } from 'jsonwebtoken';
 import { prisma } from '../config/prisma';
 import { verifyToken, UsuarioTokenPayload, ClienteTokenPayload } from '../config/jwt';
 import { AppError } from './errorHandler';
+import { getCachedSession, setCachedSession } from './resolveTenant';
+
+// ─── Usuario cache ────────────────────────────────────────────────────────────
+// Cacheamos el usuario+rol 30 segundos para no pagar un roundtrip DB en cada
+// request autenticado. El rol/permisos casi nunca cambia entre requests.
+
+interface UsuarioCacheEntry {
+  usuario: any;
+  expiresAt: number;
+}
+const usuarioCache = new Map<string, UsuarioCacheEntry>();
+const USUARIO_CACHE_TTL_MS = 30 * 1000; // 30 segundos
+
+function getCachedUsuario(usuarioId: string): any | null {
+  const e = usuarioCache.get(usuarioId);
+  if (!e) return null;
+  if (Date.now() > e.expiresAt) { usuarioCache.delete(usuarioId); return null; }
+  return e.usuario;
+}
+function setCachedUsuario(usuarioId: string, usuario: any) {
+  usuarioCache.set(usuarioId, { usuario, expiresAt: Date.now() + USUARIO_CACHE_TTL_MS });
+}
+export function invalidateUsuarioCache(usuarioId: string) {
+  usuarioCache.delete(usuarioId);
+}
 
 /**
  * Extrae el Bearer token del header Authorization.
@@ -26,6 +51,7 @@ function extractBearerToken(req: Request): string | null {
  *  6. Adjunta `req.usuario` o `req.cliente` según corresponda.
  *
  * Requiere que `resolveTenant` haya corrido antes.
+ * Sesion y Usuario se cachean en memoria para evitar roundtrips a la DB remota.
  */
 export async function authenticate(
   req: Request,
@@ -53,14 +79,11 @@ export async function authenticate(
     }
 
     // ── Guardia de tenant ────────────────────────────────────────────────────
-    // req.negocio puede ser undefined si authenticate se usa sin resolveTenant.
-    // En ese caso forzamos el error para no permitir el acceso.
     if (!req.negocio) {
       throw new AppError('Tenant context is missing. Run resolveTenant first.', 500);
     }
 
     if (payload.negocioId !== req.negocio.id) {
-      // El token fue emitido para otro negocio — posible intento de acceso cruzado
       throw new AppError('Token does not belong to this tenant.', 403);
     }
 
@@ -82,32 +105,46 @@ export async function authenticate(
 
 /**
  * Valida usuario de panel:
- *  - Verifica que la Sesion exista y no esté revocada ni vencida.
- *  - Carga el Usuario con su Rol.
- *  - Verifica que el usuario esté activo.
+ *  - Sesion: cacheada 60s, solo la busca en DB si no está en caché.
+ *  - Usuario+Rol: cacheado 30s, solo lo busca en DB si no está en caché.
+ *  - Ambas lookups corren en Promise.all cuando no hay caché.
  */
 async function authenticateUsuario(
   req: Request,
   payload: UsuarioTokenPayload
 ): Promise<void> {
-  // Verificar sesión activa en BD
-  const sesion = await prisma.sesion.findUnique({
-    where: { id: payload.sesionId },
-  });
+  // Intentar servir desde caché
+  const cachedSesion = getCachedSession(payload.sesionId);
+  const cachedUsuario = getCachedUsuario(payload.sub);
+
+  let sesion = cachedSesion;
+  let usuario = cachedUsuario;
+
+  // Solo consultar DB para los que faltan en caché (en paralelo)
+  if (!sesion && !usuario) {
+    [sesion, usuario] = await Promise.all([
+      prisma.sesion.findUnique({ where: { id: payload.sesionId } }),
+      prisma.usuario.findFirst({
+        where: { id: payload.sub, negocioId: req.negocio!.id, activo: true },
+        include: { rol: true },
+      }),
+    ]);
+    if (sesion) setCachedSession(payload.sesionId, sesion);
+    if (usuario) setCachedUsuario(payload.sub, usuario);
+  } else if (!sesion) {
+    sesion = await prisma.sesion.findUnique({ where: { id: payload.sesionId } });
+    if (sesion) setCachedSession(payload.sesionId, sesion);
+  } else if (!usuario) {
+    usuario = await prisma.usuario.findFirst({
+      where: { id: payload.sub, negocioId: req.negocio!.id, activo: true },
+      include: { rol: true },
+    });
+    if (usuario) setCachedUsuario(payload.sub, usuario);
+  }
 
   if (!sesion || sesion.revokedAt !== null || sesion.expiraEl < new Date()) {
     throw new AppError('Session is invalid or has been revoked.', 401);
   }
-
-  // Cargar usuario con rol (negocioId ya validado arriba)
-  const usuario = await prisma.usuario.findFirst({
-    where: {
-      id: payload.sub,
-      negocioId: req.negocio!.id,
-      activo: true,
-    },
-    include: { rol: true },
-  });
 
   if (!usuario) {
     throw new AppError('User not found or inactive.', 401);

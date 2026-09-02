@@ -9,6 +9,7 @@ import {
   UsuarioTokenPayload,
 } from '../../config/jwt';
 import { prisma } from '../../config/prisma';
+import { invalidateSessionCache } from '../../middlewares/resolveTenant';
 import { AppError } from '../../middlewares/errorHandler';
 import { LoginUsuarioDto, RegisterClienteDto, LoginGoogleDto } from './auth.schema';
 
@@ -78,7 +79,7 @@ export async function loginUsuario(
   };
 
   const accessToken = signAccessToken(payload);
-  const refreshToken = signRefreshToken({ sub: usuario.id, type: 'usuario' });
+  const refreshToken = signRefreshToken({ sub: usuario.id, negocioId, type: 'usuario' });
 
   // Guardar refresh token en la sesión
   await prisma.sesion.update({
@@ -144,7 +145,7 @@ export async function registerCliente(
     type: 'cliente',
   });
 
-  const refreshToken = signRefreshToken({ sub: cliente.id, type: 'cliente' });
+  const refreshToken = signRefreshToken({ sub: cliente.id, negocioId, type: 'cliente' });
 
   const { passwordHash: _ph, ...clienteSafe } = cliente;
 
@@ -164,6 +165,8 @@ export async function logoutUsuario(sesionId: string): Promise<void> {
     where: { id: sesionId },
     data: { revokedAt: new Date() },
   });
+  // Invalidar caché en memoria para que la sesión revocada no sea servida
+  invalidateSessionCache(sesionId);
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -331,7 +334,7 @@ export async function loginGoogle(
     };
 
     const accessToken = signAccessToken(jwtPayload);
-    const refreshToken = signRefreshToken({ sub: usuario.id, type: 'usuario' });
+    const refreshToken = signRefreshToken({ sub: usuario.id, negocioId, type: 'usuario' });
 
     await prisma.sesion.update({
       where: { id: sesion.id },
@@ -389,7 +392,7 @@ export async function loginGoogle(
       negocioId,
       type: 'cliente',
     });
-    const refreshToken = signRefreshToken({ sub: cliente.id, type: 'cliente' });
+    const refreshToken = signRefreshToken({ sub: cliente.id, negocioId, type: 'cliente' });
 
     await prisma.clienteAuth.update({
       where: { id: cliente.id },
@@ -436,7 +439,7 @@ export async function loginCliente(
     negocioId,
     type: 'cliente',
   });
-  const refreshToken = signRefreshToken({ sub: cliente.id, type: 'cliente' });
+  const refreshToken = signRefreshToken({ sub: cliente.id, negocioId, type: 'cliente' });
 
   await prisma.clienteAuth.update({
     where: { id: cliente.id },

@@ -3,6 +3,8 @@ import Layout from '../../../../components/tienda/plantillas/restaurante-clasico
 import Home from './Home'
 import Menu from './Menu'
 import About from './About'
+import ReservarPage from './ReservarPage'
+import MisReservacionesPage from './MisReservacionesPage'
 
 export function RestauranteClasicoRoot() {
   return (
@@ -11,6 +13,8 @@ export function RestauranteClasicoRoot() {
         <Route index element={<Home />} />
         <Route path="menu" element={<Menu />} />
         <Route path="nosotros" element={<About />} />
+        <Route path="reservar" element={<ReservarPage />} />
+        <Route path="mis-reservaciones" element={<MisReservacionesPage />} />
       </Route>
     </Routes>
   )

@@ -2,6 +2,7 @@ import { prisma } from '../../config/prisma';
 import { stripe } from '../../config/stripe';
 import { config } from '../../config/env';
 import { AppError } from '../../middlewares/errorHandler';
+import { invalidateNegocioCache } from '../../middlewares/resolveTenant';
 
 /**
  * Inicia el proceso de Stripe Connect (Onboarding) para un negocio.
@@ -39,11 +40,14 @@ export async function createStripeOnboardingLink(
       where: { id: negocioId },
       data: { stripeAccountId: account.id },
     });
+
+    // Invalida inmediatamente la caché de Negocio
+    invalidateNegocioCache(negocioId);
   }
 
   // 2. Generar Account Link para el onboarding
   const origin = config.baseDomain === 'localhost' ? 'http://localhost:5173' : `https://panel.${config.baseDomain}`;
-  
+
   const accountLink = await stripe.accountLinks.create({
     account: negocio.stripeAccountId!,
     refresh_url: `${origin}/configuracion/pagos/reintentar`,
@@ -55,7 +59,7 @@ export async function createStripeOnboardingLink(
 }
 
 /**
- * Crea un SetupIntent en la cuenta principal de la plataforma para cobrarle la membres�a al Negocio.
+ * Crea un SetupIntent en la cuenta principal de la plataforma para cobrarle la membresía al Negocio.
  */
 export async function createPlatformSetupIntent(
   negocioId: string
@@ -85,6 +89,9 @@ export async function createPlatformSetupIntent(
       where: { id: negocio.id },
       data: { stripeCustomerId },
     });
+
+    // Invalida inmediatamente la caché de Negocio
+    invalidateNegocioCache(negocio.id);
   }
 
   // 2. Crear un SetupIntent para ese Customer
@@ -100,19 +107,27 @@ export async function createPlatformSetupIntent(
   return { clientSecret: setupIntent.client_secret! };
 }
 
+/**
+ * Consulta el estado real de la cuenta Stripe en Stripe API.
+ * Si la cuenta ya completó el onboarding, actualiza `stripeOnboardingCompleto: true`
+ * en BD e invalida el caché de Negocio para que todos los middlewares lo vean inmediatamente.
+ */
 export async function checkStripeAccountStatus(negocioId: string) {
   const negocio = await prisma.negocio.findUnique({ where: { id: negocioId } });
   if (!negocio) throw new AppError('Business not found', 404);
   if (!negocio.stripeAccountId) throw new AppError('Stripe account not linked', 400);
 
   const account = await stripe.accounts.retrieve(negocio.stripeAccountId);
-  const isComplete = account.charges_enabled && account.details_submitted;
+  const isComplete = Boolean(account.charges_enabled && account.details_submitted);
 
   if (isComplete && !negocio.stripeOnboardingCompleto) {
     await prisma.negocio.update({
       where: { id: negocioId },
       data: { stripeOnboardingCompleto: true }
     });
+
+    // Invalida inmediatamente la caché de Negocio para refrescar req.negocio
+    invalidateNegocioCache(negocioId);
   }
 
   return {
@@ -121,4 +136,3 @@ export async function checkStripeAccountStatus(negocioId: string) {
     onboardingCompleto: isComplete || negocio.stripeOnboardingCompleto
   };
 }
-

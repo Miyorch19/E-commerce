@@ -2,8 +2,12 @@ import { useState, useEffect } from 'react';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
 
 import { useTenantStore } from '../../../../stores/useTenantStore';
+import { useTiendaStore } from '../../../../stores/useTiendaStore';
+
 export default function Navbar({ hasDarkHero = false }: { hasDarkHero?: boolean }) {
   const negocio = useTenantStore((s: any) => s.negocio);
+  const cliente = useTiendaStore((s) => s.cliente);
+  const logout = useTiendaStore((s) => s.logout);
   const [isOpen, setIsOpen] = useState(false);
   const [isScrolled, setIsScrolled] = useState(false);
   const location = useLocation();
@@ -12,10 +16,8 @@ export default function Navbar({ hasDarkHero = false }: { hasDarkHero?: boolean 
   const handleContacto = () => {
     setIsOpen(false);
     if (location.pathname === '/tienda') {
-      // Ya estamos en Home — scroll directo
       document.getElementById('contacto')?.scrollIntoView({ behavior: 'smooth' });
     } else {
-      // Navegar a Home y luego hacer scroll
       navigate('/tienda');
       setTimeout(() => {
         document.getElementById('contacto')?.scrollIntoView({ behavior: 'smooth' });
@@ -31,10 +33,7 @@ export default function Navbar({ hasDarkHero = false }: { hasDarkHero?: boolean 
         setIsScrolled(false);
       }
     };
-    
-    // Configurar estado inicial
     handleScroll();
-    
     window.addEventListener('scroll', handleScroll);
     return () => window.removeEventListener('scroll', handleScroll);
   }, []);
@@ -42,7 +41,12 @@ export default function Navbar({ hasDarkHero = false }: { hasDarkHero?: boolean 
   const links = [
     { name: 'Menú', path: '/tienda/menu' },
     { name: 'Nosotros', path: '/tienda/nosotros' },
+    { name: 'Reservar Mesa', path: '/tienda/reservar' },
   ];
+
+  if (cliente) {
+    links.push({ name: 'Mis Reservaciones', path: '/tienda/mis-reservaciones' });
+  }
 
   const isSolid = !hasDarkHero || isScrolled;
   const navClasses = `fixed top-0 w-full z-50 transition-colors duration-300 font-[family-name:var(--font-mono)] ${
@@ -60,7 +64,7 @@ export default function Navbar({ hasDarkHero = false }: { hasDarkHero?: boolean 
           </div>
           
           {/* Desktop menu */}
-          <div className="hidden md:flex items-center space-x-10">
+          <div className="hidden md:flex items-center space-x-8">
             {links.map((link) => (
               <Link
                 key={link.path}
@@ -78,6 +82,25 @@ export default function Navbar({ hasDarkHero = false }: { hasDarkHero?: boolean 
             >
               Contacto
             </button>
+
+            {cliente ? (
+              <button
+                onClick={() => {
+                  logout();
+                  navigate('/tienda');
+                }}
+                className="text-xs uppercase tracking-[0.2em] border border-current px-3 py-1.5 hover:opacity-70 transition-opacity"
+              >
+                Salir ({cliente.nombre.split(' ')[0]})
+              </button>
+            ) : (
+              <Link
+                to="/tienda/login"
+                className="text-xs uppercase tracking-[0.2em] border border-current px-3 py-1.5 hover:opacity-70 transition-opacity"
+              >
+                Ingresar
+              </Link>
+            )}
           </div>
 
           {/* Mobile menu button */}
@@ -119,6 +142,26 @@ export default function Navbar({ hasDarkHero = false }: { hasDarkHero?: boolean 
             >
               Contacto
             </button>
+            {cliente ? (
+              <button
+                onClick={() => {
+                  setIsOpen(false);
+                  logout();
+                  navigate('/tienda');
+                }}
+                className="block text-sm uppercase tracking-[0.2em] text-left w-full text-[var(--color-accent)]"
+              >
+                Cerrar Sesión ({cliente.nombre})
+              </button>
+            ) : (
+              <Link
+                to="/tienda/login"
+                onClick={() => setIsOpen(false)}
+                className="block text-sm uppercase tracking-[0.2em] text-[var(--color-accent)]"
+              >
+                Iniciar Sesión
+              </Link>
+            )}
           </div>
         </div>
       )}

@@ -270,6 +270,44 @@ async function main(): Promise<void> {
     });
   }
 
+  // 8. Horarios semanales del negocio
+  const horariosConfig = [
+    { dia: 'LUNES', activo: false, horaInicio: '12:00', horaFin: '23:00' },
+    { dia: 'MARTES', activo: true, horaInicio: '12:00', horaFin: '23:00' },
+    { dia: 'MIERCOLES', activo: true, horaInicio: '12:00', horaFin: '23:00' },
+    { dia: 'JUEVES', activo: true, horaInicio: '12:00', horaFin: '23:00' },
+    { dia: 'VIERNES', activo: true, horaInicio: '12:00', horaFin: '23:00' },
+    { dia: 'SABADO', activo: true, horaInicio: '12:00', horaFin: '23:00' },
+    { dia: 'DOMINGO', activo: true, horaInicio: '12:00', horaFin: '23:00' },
+  ];
+
+  for (const h of horariosConfig) {
+    const existing = await prisma.horario.findFirst({
+      where: { negocioId: negocio.id, dia: h.dia as any, staffId: null },
+    });
+    if (existing) {
+      await prisma.horario.update({
+        where: { id: existing.id },
+        data: {
+          horaInicio: h.horaInicio,
+          horaFin: h.horaFin,
+          activo: h.activo,
+        },
+      });
+    } else {
+      await prisma.horario.create({
+        data: {
+          negocioId: negocio.id,
+          dia: h.dia as any,
+          horaInicio: h.horaInicio,
+          horaFin: h.horaFin,
+          activo: h.activo,
+        },
+      });
+    }
+  }
+  console.log(`✅ Horarios → 7 días configurados (Lunes cerrado, Martes-Domingo 12:00-23:00)`);
+
   console.log('\n🎉 Seed completed successfully.');
   console.log('\n─── Credenciales de prueba ───────────────────────────────');
   console.log(`   URL:      http://localhost:3001/api/auth/login`);
